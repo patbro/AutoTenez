@@ -4,9 +4,12 @@ import datetime
 import time
 import os
 import json
-#import pyjwt
+import jwt
+import sys
 
 ###################################################
+
+only_retrieve_clubapp_id = False
 
 email_address = "" # Your email address
 password = "" # Your password in plain-text
@@ -97,19 +100,6 @@ def check_court(courts, court_name):
 
     return False
 
-#try:
-#    print("Attempt to retrieve bearer token from file")
-#    f = open("makeTennisReservationBearerToken.txt", "r")
-#    bearer_token = f.readlines()
-#    f.close()
-#
-#    decoded = jwt.decode(bearer_token, algorithms=["RS256"])
-#    print(decoded)
-#
-#    raise Exception("Bearer token expired")
-#except:
-#    print("Failed to retrieve bearer token from file")
-
 # First of all, login 
 login_cli_cmd = "curl -i -s -k -X $'POST' \
     -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'Content-Length: 83' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
@@ -120,21 +110,46 @@ login_cli_cmd = "curl -i -s -k -X $'POST' \
 output = os.popen(login_cli_cmd).read()
 
 # Remove extranaeous headers
-tail_cli_cmd = "tail -n +8 AutoTenezOutputLogin.txt > AutoTenezOutputLogin.txt"
+tail_cli_cmd = "tail -n +8 AutoTenezOutputLogin.txt > AutoTenezOutputLoginTailed.txt"
 output = os.popen(tail_cli_cmd).read()
 
 # Parse login JSON response
-with open('AutoTenezOutputLogin.txt') as f:
+with open('AutoTenezOutputLoginTailed.txt') as f:
     json_data = json.load(f)
 
 # Obtain bearer token from the JSON reponse
 bearer_token = json_data['access_token']
 
+# Save bearer token to file for later use
 f = open("AutoTenezOutputBearerToken.txt", "w")
 f.write(bearer_token)
 f.close()
 
-# Retireve slots for tomorrow
+if (only_retrieve_clubapp_id == True):
+    # Retrieve user ID, so we can make another call to retrieve your external reference (i.e. clubapp ID)
+    decoded = jwt.decode(bearer_token, options={"verify_signature": False})
+    user_id = str(decoded)[166:190] # No comment...
+    
+    get_external_reference_cli_cmd = "curl -i -s -k -X $'GET' \
+    -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
+    -b $'AWSELB=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294; AWSELBCORS=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294' \
+    $'https://api.socie.nl/v2/me/communities/5a250a75d186db12a00f1def/memberships/" + user_id + "' > AutoTenezOutputGetExternalReference.txt"
+
+    output = os.popen(get_external_reference_cli_cmd).read()
+
+    # Remove extranaeous headers
+    tail_cli_cmd = "tail -n +8 AutoTenezOutputGetExternalReference.txt > AutoTenezOutputGetExternalReferenceTailed.txt"
+    output = os.popen(tail_cli_cmd).read()
+
+    # Parse JSON response
+    with open('AutoTenezOutputGetExternalReferenceTailed.txt') as f:
+        json_data = json.load(f)
+
+    print("Your clubapp ID is:")
+    print(json_data['extraFields']['externalReference'])
+    sys.exit(0)
+
+# Retrieve slots for tomorrow
 date_tomorrow = date.today() + datetime.timedelta(days=1)
 # Prepare request to perform
 get_slots_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
@@ -146,11 +161,11 @@ get_slots_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
 output = os.popen(get_slots_tomorrow_cli_cmd).read()
 
 # Remove extranaeous headers
-tail_cli_cmd = "tail -n +8 AutoTenezOutputSlots.txt > AutoTenezOutputSlots.txt"
+tail_cli_cmd = "tail -n +8 AutoTenezOutputSlots.txt > AutoTenezOutputSlotsTailed.txt"
 output = os.popen(tail_cli_cmd).read()
 
 # Parse JSON response
-with open('AutoTenezOutputSlots.txt') as f:
+with open('AutoTenezOutputSlotsTailed.txt') as f:
     json_data = json.load(f)
 
 available_slots = []
