@@ -148,34 +148,39 @@ else:
     # It's anyway only possible to reserve a court with at least 2 people or more
     friends_clubapp_ids = friend1_clubapp_id
 
+awselb_cookie = ""
+awselbcors_cookie = ""
+
 # Retrieve the cookies first. They are apparently necessary to perform a valid request to the server
-try:
-    retrieve_cookies_cli_cmd = "curl -i -s -k -X $'GET' \
-        -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        $'https://api.socie.nl/public/ping'"
+if (not awselb_cookie) or (not awselbcors_cookie):
+    try:
+        print("Retrieving cookies...")
+        retrieve_cookies_cli_cmd = "curl -i -s -k -X $'GET' \
+            -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
+            $'https://api.socie.nl/public/ping'"
 
-    output = os.popen(retrieve_cookies_cli_cmd).read()
+        output = os.popen(retrieve_cookies_cli_cmd).read()
+        
+        # Parse the cookies from the response
+        # AWS ELB cookie
+        begin_awselb_cookie = output.index("AWSELB=")
+        end_awselb_cookie = begin_awselb_cookie + 138 # Cookie length is 138 characters
+        awselb_cookie = output[begin_awselb_cookie:end_awselb_cookie]
 
-    # Parse the cookies from the response
-    # AWS ELB cookie
-    begin_awselb_cookie = output.index("AWSELB=")
-    end_awselb_cookie = begin_awselb_cookie + 138 # Cookie length is 138 characters
-    awselb_cookie = output[begin_awselb_cookie:end_awselb_cookie]
+        # The AWS ELB CORS cookie is probably the same, but just retrieve as well it to be sure
+        begin_awselbcors_cookie = output.index("AWSELBCORS=")
+        end_awselbcors_cookie = begin_awselbcors_cookie + 138 # Cookie length is 138 characters
+        awselbcors_cookie = output[begin_awselbcors_cookie:end_awselbcors_cookie]
 
-    # The AWS ELB CORS cookie is probably the same, but just retrieve as well it to be sure
-    begin_awselbcors_cookie = output.index("AWSELBCORS=")
-    end_awselbcors_cookie = begin_awselbcors_cookie + 138 # Cookie length is 138 characters
-    awselbcors_cookie = output[begin_awselbcors_cookie:end_awselbcors_cookie]
+    except ValueError as e:
+        print("ERROR! Failed to retrieve the cookies. Could not parse the response")
+        print(e)
+        sys.exit(-1)
 
-except ValueError as e:
-    print("ERROR! Failed to retrieve the cookies. Could not parse the response")
-    print(e)
-    sys.exit(-1)
-
-except Exception as e:
-    print("ERROR! An unknown error occurred while trying to retrieve the cookies")
-    print(e)
-    sys.exit(-1)
+    except Exception as e:
+        print("ERROR! An unknown error occurred while trying to retrieve the cookies")
+        print(e)
+        sys.exit(-1)
 
 # Logging you in
 try:
