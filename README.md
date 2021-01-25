@@ -7,3 +7,4 @@ Automates the process of making tennis court reservations for you.
 
 ## Known issues
 * Performs a login everytime you run the script. Please do not run the script too often.
+* Does not account for how many number of players the court is available to make a reservation.
