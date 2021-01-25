@@ -7,6 +7,7 @@ import os
 import json
 import jwt
 import sys
+from subprocess import Popen, PIPE
 
 ###################################################
 
@@ -111,10 +112,13 @@ def make_reservation(bearer_token, date_tomorrow, md5slotkey, your_clubapp_id, f
     time.sleep(1) # Lets not stress the server too much
     make_reservation_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
         -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'membership_id: 5d635eee1ea4c97b221c58fc' -H $'Language: en-NL' -H $'Accept-Encoding: gzip, deflate' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
+        -b $'" + awselb_cookie + "; " + awselbcors_cookie + "' \
         $'https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" + str(date_tomorrow) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + your_clubapp_id + "," + friends_clubapp_ids + ",' 2>&1 | tee AutoTenezOutputReservation.txt"
 
-    output = os.popen(make_reservation_tomorrow_cli_cmd).read()
+    p = Popen(make_reservation_tomorrow_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = p.communicate()
+    output = str(stdout)
+    
     # A reponse with no content is returned if the reservation was successful
     valid_output = "HTTP/1.1 204 No Content"
     if (output.find(valid_output) == 0):
@@ -159,14 +163,16 @@ if (not awselb_cookie) or (not awselbcors_cookie):
             -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
             $'https://api.socie.nl/public/ping'"
 
-        output = os.popen(retrieve_cookies_cli_cmd).read()
+        p = Popen(retrieve_cookies_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = p.communicate()
+        output = str(stdout)
         
         # Parse the cookies from the response
         # AWS ELB cookie
         begin_awselb_cookie = output.index("AWSELB=")
         end_awselb_cookie = begin_awselb_cookie + 138 # Cookie length is 138 characters
         awselb_cookie = output[begin_awselb_cookie:end_awselb_cookie]
-
+        
         # The AWS ELB CORS cookie is probably the same, but just retrieve as well it to be sure
         begin_awselbcors_cookie = output.index("AWSELBCORS=")
         end_awselbcors_cookie = begin_awselbcors_cookie + 138 # Cookie length is 138 characters
@@ -175,11 +181,13 @@ if (not awselb_cookie) or (not awselbcors_cookie):
     except ValueError as e:
         print("ERROR! Failed to retrieve the cookies. Could not parse the response")
         print(e)
+        print(stderr)
         sys.exit(-1)
 
     except Exception as e:
         print("ERROR! An unknown error occurred while trying to retrieve the cookies")
         print(e)
+        print(stderr)
         sys.exit(-1)
 
 # Logging you in
@@ -187,15 +195,20 @@ try:
     print("Logging in...")
     login_cli_cmd = "curl -i -s -k -X $'POST' \
         -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'Content-Length: 83' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
+        -b $'" + awselb_cookie + "; " + awselbcors_cookie + "' \
         --data-binary $'{\"appType\":\"TENNIS\",\"email\":\""+ email_address + "\",\"password\":\"" + password + "\"}' \
-        $'https://api.socie.nl/login/socie' > AutoTenezOutputLogin.txt"
+        $'https://api.socie.nl/login/socie' 2>&1 | tee AutoTenezOutputLogin.txt"
 
-    output = os.popen(login_cli_cmd).read()
+    p = Popen(login_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = p.communicate()
+    output = str(stdout)
 
     # Remove extranaeous headers
     tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputLogin.txt > AutoTenezOutputLoginTailed.txt"
-    output = os.popen(tail_cli_cmd).read()
+    
+    p = Popen(tail_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = p.communicate()
+    output = str(stdout)
 
     # Parse login JSON response
     with open('AutoTenezOutputLoginTailed.txt') as f:
@@ -211,13 +224,15 @@ try:
 
 # Catch JSONDecodeError
 except ValueError as e: 
-    print("ERRROR! Failed to parse the response. Please check the response in the log file. Note: stderr is not printed.")
+    print("ERRROR! Failed to parse the response")
     print(e)
+    print(stderr)
     sys.exit(-1)
 
 except Exception as e:
     print("ERROR! An unknown error occurred while logging in")
     print(e)
+    print(stderr)
     sys.exit(-1)
 
 try:
@@ -229,14 +244,19 @@ try:
         
         get_external_reference_cli_cmd = "curl -i -s -k -X $'GET' \
         -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
-        $'https://api.socie.nl/v2/me/communities/5a250a75d186db12a00f1def/memberships/" + user_id + "' > AutoTenezOutputGetExternalReference.txt"
+        -b $'" + awselb_cookie + "; " + awselbcors_cookie + "' \
+        $'https://api.socie.nl/v2/me/communities/5a250a75d186db12a00f1def/memberships/" + user_id + "' 2>&1 | tee AutoTenezOutputGetExternalReference.txt"
 
-        output = os.popen(get_external_reference_cli_cmd).read()
+        p = Popen(get_external_reference_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = p.communicate()
+        output = str(stdout)
 
         # Remove extranaeous headers
         tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputGetExternalReference.txt > AutoTenezOutputGetExternalReferenceTailed.txt"
-        output = os.popen(tail_cli_cmd).read()
+        
+        p = Popen(tail_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = p.communicate()
+        output = str(stdout)
 
         # Parse JSON response
         with open('AutoTenezOutputGetExternalReferenceTailed.txt') as f:
@@ -250,11 +270,13 @@ try:
 except ValueError as e: 
     print("ERRROR! Failed to parse the response while retrieving your clubapp ID. Please check the response in the log file. Note: stderr is not printed.")
     print(e)
+    print(stderr)
     sys.exit(-1)
    
 except Exception as e:
     print("ERROR! An unknown error occurred while retrieving your clubapp ID")
     print(e)
+    print(stderr)
     sys.exit(-1)
 
 try:
@@ -263,15 +285,20 @@ try:
     time.sleep(1) # Lets not stress the server too much
     get_slots_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
         -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'membership_id: 5d635eee1ea4c97b221c58fc' -H $'Language: en-NL' -H $'Accept-Encoding: gzip, deflate' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
-        $'https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" + str(date_tomorrow) + "&externalReferences=" + your_clubapp_id + "," + friends_clubapp_ids + ",' > AutoTenezOutputSlots.txt"
+        -b $'" + awselb_cookie + "; " + awselbcors_cookie + "' \
+        $'https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" + str(date_tomorrow) + "&externalReferences=" + your_clubapp_id + "," + friends_clubapp_ids + ",' 2>&1 | tee AutoTenezOutputSlots.txt"
 
     # Retrieve all available courts for tomorrow
-    output = os.popen(get_slots_tomorrow_cli_cmd).read()
+    p = Popen(get_slots_tomorrow_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = p.communicate()
+    output = str(stdout)
 
     # Remove extranaeous headers
     tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputSlots.txt > AutoTenezOutputSlotsTailed.txt"
-    output = os.popen(tail_cli_cmd).read()
+    
+    p = Popen(tail_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = p.communicate()
+    output = str(stdout)
 
     # Parse JSON response
     with open('AutoTenezOutputSlotsTailed.txt') as f:
@@ -296,11 +323,13 @@ try:
 except ValueError as e: 
     print("ERRROR! Failed to parse the response while retrieving the available slots. Please check the response in the log file. Note: stderr is not printed.")
     print(e)
+    print(stderr)
     sys.exit(-1)
    
 except Exception as e:
     print("ERROR! An unknown error occurred while retrieving your clubapp ID")
     print(e)
+    print(stderr)
     sys.exit(-1)
 
 try:
