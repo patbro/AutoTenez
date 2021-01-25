@@ -17,7 +17,9 @@ email_address = "" # Your email address
 password = "" # Your password in plain-text
 
 your_clubapp_id = "" # Your own clubapp ID
-friend_clubapp_id = "" # Clubapp ID of friend who you are reserving the court with
+friend1_clubapp_id = "" # Clubapp ID of friend who you are reserving the court with
+friend2_clubapp_id = "" # idem
+friend3_clubapp_id = "" # idem, if you have this many friends
 
 reservation_date = "2021-01-25" # Specify the date to make the reservation (yyyy-mm-dd)
 
@@ -43,7 +45,7 @@ def find_time_slot(available_slots, first_hour, second_hour=None, courts=[]):
     # Sanity checks
     if (len(available_slots) < 1):
         print(" - No slots available")
-        return
+        return 0, False, False
     if (first_hour is None):
         print(" - First hour is None. Skip")
         return 0, False, False
@@ -105,12 +107,12 @@ def check_court(courts, court_name):
 
     return False
 
-def make_reservation(bearer_token, date_tomorrow, md5slotkey, your_clubapp_id, friend_clubapp_id):
+def make_reservation(bearer_token, date_tomorrow, md5slotkey, your_clubapp_id, friends_clubapp_ids):
     time.sleep(1) # Lets not stress the server too much
     make_reservation_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
         -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'membership_id: 5d635eee1ea4c97b221c58fc' -H $'Language: en-NL' -H $'Accept-Encoding: gzip, deflate' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
         -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
-        $'https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" + str(date_tomorrow) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + your_clubapp_id + "," + friend_clubapp_id + ",' 2>&1 | tee AutoTenezOutputReservation.txt"
+        $'https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" + str(date_tomorrow) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + your_clubapp_id + "," + friends_clubapp_ids + ",' 2>&1 | tee AutoTenezOutputReservation.txt"
 
     output = os.popen(make_reservation_tomorrow_cli_cmd).read()
     # A reponse with no content is returned if the reservation was successful
@@ -127,7 +129,7 @@ if (not email_address) or (not password):
     print("ERROR! Enter your email address and password")
     sys.exit(0)
 
-if (only_retrieve_clubapp_id == False) and ((not your_clubapp_id) or (not friend_clubapp_id)):
+if (only_retrieve_clubapp_id == False) and ((not your_clubapp_id) or (not friend1_clubapp_id)):
     print("ERROR! Fill out the Clubapp IDs")
     sys.exit(0)
 
@@ -136,6 +138,15 @@ date_tomorrow = date.today() + timedelta(days=1)
 if (only_retrieve_clubapp_id == False) and (str(date_tomorrow) != reservation_date):
     print("INFO! Chosen date (" + reservation_date + ") is not yet tomorrow ("+ str(date_tomorrow) +").")
     sys.exit(0)
+
+# Prepare friends clubadd IDs to send with some of the requests
+if (friend1_clubapp_id and friend2_clubapp_id and friend3_clubapp_id):
+    friends_clubapp_ids = friend1_clubapp_id + "," + friend2_clubapp_id + "," + friend3_clubapp_id
+elif (friend1_clubapp_id and friend2_clubapp_id):
+    friends_clubapp_ids = friend1_clubapp_id + "," + friend2_clubapp_id
+else:
+    # It's anyway only possible to reserve a court with at least 2 people or more
+    friends_clubapp_ids = friend1_clubapp_id
 
 # Retrieve the cookies first. They are apparently necessary to perform a valid request to the server
 retrieve_cookies_cli_cmd = "curl -i -s -k -X $'GET' \
@@ -208,10 +219,11 @@ if (only_retrieve_clubapp_id == True):
 
 # Retrieve slots for tomorrow
 print("Retrieving time slots for tomorrow...")
+time.sleep(1) # Lets not stress the server too much
 get_slots_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
     -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'membership_id: 5d635eee1ea4c97b221c58fc' -H $'Language: en-NL' -H $'Accept-Encoding: gzip, deflate' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
     -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
-    $'https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" + str(date_tomorrow) + "&externalReferences=" + your_clubapp_id + "," + friend_clubapp_id + ",' > AutoTenezOutputSlots.txt"
+    $'https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" + str(date_tomorrow) + "&externalReferences=" + your_clubapp_id + "," + friends_clubapp_ids + ",' > AutoTenezOutputSlots.txt"
 
 # Retrieve all available courts for tomorrow
 output = os.popen(get_slots_tomorrow_cli_cmd).read()
@@ -274,8 +286,8 @@ if (dryrun):
 
 if (first_md5slotkey):
     print("Make the reservation for the first time slot...")
-    make_reservation(bearer_token, date_tomorrow, first_md5slotkey, your_clubapp_id, friend_clubapp_id)
+    make_reservation(bearer_token, date_tomorrow, first_md5slotkey, your_clubapp_id, friends_clubapp_ids)
 
 if (second_md5slotkey):
     print("Make the reservation for the second time slot...")
-    make_reservation(bearer_token, date_tomorrow, second_md5slotkey, your_clubapp_id, friend_clubapp_id)
+    make_reservation(bearer_token, date_tomorrow, second_md5slotkey, your_clubapp_id, friends_clubapp_ids)
