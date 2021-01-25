@@ -11,7 +11,7 @@ import sys
 ###################################################
 
 only_retrieve_clubapp_id = False # Set to True to retrieve your clubapp ID, then set to False again
-only_check_time_slots_dont_make_reservation = False # Dry run functionality. False by default
+dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
 email_address = "" # Your email address
 password = "" # Your password in plain-text
@@ -29,12 +29,11 @@ second_choice_first_hour = "08:00" # Either specify a time or None (hh:mm)
 second_choice_second_hour = None # Either specify a time or None (hh:mm)
 second_choice_courts = [] # Either specify courts ("Baan X", where X is the court number) or []
 
-# Usually you don't have to mess with the cookies, rather than just eating them
-cookies = "AWSELB=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294; AWSELBCORS=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294"
-
 ###################################################
 ##### DO NOT CHANGE ANY LINES BELOW THIS LINE #####
 ###################################################
+
+lines_to_tail = "10"
 
 def find_time_slot(available_slots, first_hour, second_hour=None, courts=[]):
     previous_slot_available_and_matches = False
@@ -110,7 +109,7 @@ def make_reservation(bearer_token, date_tomorrow, md5slotkey, your_clubapp_id, f
     time.sleep(1) # Lets not stress the server too much
     make_reservation_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
         -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'membership_id: 5d635eee1ea4c97b221c58fc' -H $'Language: en-NL' -H $'Accept-Encoding: gzip, deflate' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'" + cookies + "' \
+        -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
         $'https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" + str(date_tomorrow) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + your_clubapp_id + "," + friend_clubapp_id + ",' 2>&1 | tee AutoTenezOutputReservation.txt"
 
     output = os.popen(make_reservation_tomorrow_cli_cmd).read()
@@ -134,22 +133,40 @@ if (only_retrieve_clubapp_id == False) and ((not your_clubapp_id) or (not friend
 
 # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
 date_tomorrow = date.today() + timedelta(days=1)
-if (str(date_tomorrow) != reservation_date):
+if (only_retrieve_clubapp_id == False) and (str(date_tomorrow) != reservation_date):
     print("INFO! Chosen date (" + reservation_date + ") is not yet tomorrow ("+ str(date_tomorrow) +").")
     sys.exit(0)
 
-# First of all, login 
+# Retrieve the cookies first. They are apparently necessary to perform a valid request to the server
+retrieve_cookies_cli_cmd = "curl -i -s -k -X $'GET' \
+    -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
+    $'https://api.socie.nl/public/ping'"
+
+output = os.popen(retrieve_cookies_cli_cmd).read()
+
+# Parse the cookies from the response
+# AWS ELB cookie
+begin_awselb_cookie = output.index("AWSELB=")
+end_awselb_cookie = begin_awselb_cookie + 138 # Cookie length is 138 characters
+awselb_cookie = output[begin_awselb_cookie:end_awselb_cookie]
+
+# The AWS ELB CORS cookie is probably the same, but just retrieve as well it to be sure
+begin_awselbcors_cookie = output.index("AWSELBCORS=")
+end_awselbcors_cookie = begin_awselbcors_cookie + 138 # Cookie length is 138 characters
+awselbcors_cookie = output[begin_awselbcors_cookie:end_awselbcors_cookie]
+
+# Logging you in
 print("Logging in...")
 login_cli_cmd = "curl -i -s -k -X $'POST' \
     -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'Content-Length: 83' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-    -b $'AWSELB=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294; AWSELBCORS=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294' \
+    -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
     --data-binary $'{\"appType\":\"TENNIS\",\"email\":\""+ email_address + "\",\"password\":\"" + password + "\"}' \
     $'https://api.socie.nl/login/socie' > AutoTenezOutputLogin.txt"
 
 output = os.popen(login_cli_cmd).read()
 
 # Remove extranaeous headers
-tail_cli_cmd = "tail -n +8 AutoTenezOutputLogin.txt > AutoTenezOutputLoginTailed.txt"
+tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputLogin.txt > AutoTenezOutputLoginTailed.txt"
 output = os.popen(tail_cli_cmd).read()
 
 # Parse login JSON response
@@ -172,13 +189,13 @@ if (only_retrieve_clubapp_id == True):
     
     get_external_reference_cli_cmd = "curl -i -s -k -X $'GET' \
     -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-    -b $'AWSELB=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294; AWSELBCORS=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294' \
+    -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
     $'https://api.socie.nl/v2/me/communities/5a250a75d186db12a00f1def/memberships/" + user_id + "' > AutoTenezOutputGetExternalReference.txt"
 
     output = os.popen(get_external_reference_cli_cmd).read()
 
     # Remove extranaeous headers
-    tail_cli_cmd = "tail -n +8 AutoTenezOutputGetExternalReference.txt > AutoTenezOutputGetExternalReferenceTailed.txt"
+    tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputGetExternalReference.txt > AutoTenezOutputGetExternalReferenceTailed.txt"
     output = os.popen(tail_cli_cmd).read()
 
     # Parse JSON response
@@ -193,14 +210,14 @@ if (only_retrieve_clubapp_id == True):
 print("Retrieving time slots for tomorrow...")
 get_slots_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
     -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'membership_id: 5d635eee1ea4c97b221c58fc' -H $'Language: en-NL' -H $'Accept-Encoding: gzip, deflate' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-    -b $'AWSELB=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294; AWSELBCORS=57C90D931ED7A0D581FA0FDCC1A541BAF664D2A7C6ADF011E1622185F3430930403132013A6DD48D61EC856130104D8A52983E53940E17D1F9E11CA9FA6416D564EE3AF294' \
+    -b $'AWSELB=" + awselb_cookie + "; AWSELBCORS=" + awselbcors_cookie + "' \
     $'https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" + str(date_tomorrow) + "&externalReferences=" + your_clubapp_id + "," + friend_clubapp_id + ",' > AutoTenezOutputSlots.txt"
 
 # Retrieve all available courts for tomorrow
 output = os.popen(get_slots_tomorrow_cli_cmd).read()
 
 # Remove extranaeous headers
-tail_cli_cmd = "tail -n +8 AutoTenezOutputSlots.txt > AutoTenezOutputSlotsTailed.txt"
+tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputSlots.txt > AutoTenezOutputSlotsTailed.txt"
 output = os.popen(tail_cli_cmd).read()
 
 # Parse JSON response
@@ -251,7 +268,7 @@ elif(first_choice_first_slotkey != False):
 else:
     print("There are no time slots available")
 
-if (only_check_time_slots_dont_make_reservation):
+if (dryrun):
     print("Not making a reservation because dryrun is set to True")
     sys.exit(0)
 
