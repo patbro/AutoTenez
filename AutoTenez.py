@@ -127,17 +127,17 @@ def make_reservation(bearer_token, date_tomorrow, md5slotkey, your_clubapp_id, f
 # Sanity checks
 if (not email_address) or (not password):
     print("ERROR! Enter your email address and password")
-    #sys.exit(0)
+    sys.exit(0)
 
 if (only_retrieve_clubapp_id == False) and ((not your_clubapp_id) or (not friend1_clubapp_id)):
     print("ERROR! Fill out the Clubapp IDs")
-    #sys.exit(0)
+    sys.exit(0)
 
 # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
 date_tomorrow = date.today() + timedelta(days=1)
 if (only_retrieve_clubapp_id == False) and (str(date_tomorrow) != reservation_date):
     print("INFO! Chosen date (" + reservation_date + ") is not yet tomorrow ("+ str(date_tomorrow) +").")
-    #sys.exit(0)
+    sys.exit(0)
 
 # Prepare friends clubadd IDs to send with some of the requests
 if (friend1_clubapp_id and friend2_clubapp_id and friend3_clubapp_id):
