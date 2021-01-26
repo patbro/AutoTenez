@@ -258,7 +258,7 @@ try:
     response = r.json()
 
     available_slots = []
-    # Loop through all courts: 0 - 13 in our case
+    # Loop through all courts: 0 to 13 in our case
     for court_no in range(0, 13):
         slots = response['locations'][court_no]['slots']
         # Every time slot has slots
