@@ -7,20 +7,19 @@ import os
 import json
 import jwt
 import sys
-from subprocess import Popen, PIPE
+import requests
 
 ###################################################
-
-only_retrieve_clubapp_id = False # Set to True to retrieve your clubapp ID, then set to False again
-dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
 email_address = "" # Your email address
 password = "" # Your password in plain-text
 
-your_clubapp_id = "" # Your own clubapp ID
-friend1_clubapp_id = "" # Clubapp ID of friend who you are reserving the court with
-friend2_clubapp_id = "" # idem
-friend3_clubapp_id = "" # idem, if you have this many friends
+only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
+dryrun = False # Only check available time slots, but don't make a reservation. False by default
+
+player2_external_reference = "" # External reference of friend who you are reserving the court with
+player3_external_reference = "" # Idem
+player4_external_reference = "" # Idem. If you have this many friends
 
 reservation_date = "2021-01-25" # Specify the date to make the reservation (yyyy-mm-dd)
 
@@ -36,12 +35,11 @@ second_choice_courts = [] # Either specify courts ("Baan X", where X is the cour
 ##### DO NOT CHANGE ANY LINES BELOW THIS LINE #####
 ###################################################
 
-lines_to_tail = "10"
-
 def find_time_slot(available_slots, first_hour, second_hour=None, courts=[]):
     previous_slot_available_and_matches = False
     second_time_slot_found = False
     first_time_slot_found = False
+    first_court_first_time_slot_found = False
 
     # Sanity checks
     if (len(available_slots) < 1):
@@ -73,6 +71,12 @@ def find_time_slot(available_slots, first_hour, second_hour=None, courts=[]):
             # A court (for at least the first hour) is available! Check if desired court matches
             if (check_court(courts, court_name) == True):
                 first_time_slot_found = md5slotkey
+
+                # Additional variable to save first court where the first time slot is available,
+                # if no second time slot would be found, the last court would be returned instead of the first one.
+                if (first_court_first_time_slot_found == False):
+                    first_court_first_time_slot_found = md5slotkey
+                
                 # Did the user specify a second hour?
                 if (second_hour == None):
                     print(" - For the chosen time slot the first hour " + first_hour + " is available on " + court_name + " (" + md5slotkey + ")")
@@ -87,6 +91,10 @@ def find_time_slot(available_slots, first_hour, second_hour=None, courts=[]):
         return 2, first_time_slot_found, second_time_slot_found
     
     if (first_time_slot_found != False):
+        # Return the first available court instead of the last one
+        if (second_hour is not None):
+            first_time_slot_found = first_court_first_time_slot_found
+
         # Reserve single time slot. Both time slots were not available
         return 1, first_time_slot_found, False
 
@@ -108,23 +116,19 @@ def check_court(courts, court_name):
 
     return False
 
-def make_reservation(bearer_token, date_tomorrow, md5slotkey, your_clubapp_id, friends_clubapp_ids):
+def make_reservation(headers, cookies, date_tomorrow, md5slotkey, your_external_reference, other_players_external_references):
     time.sleep(1) # Lets not stress the server too much
-    make_reservation_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
-        -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'membership_id: 5d635eee1ea4c97b221c58fc' -H $'Language: en-NL' -H $'Accept-Encoding: gzip, deflate' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'" + awselb_cookie + "; " + awselbcors_cookie + "' \
-        $'https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" + str(date_tomorrow) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + your_clubapp_id + "," + friends_clubapp_ids + ",' 2>&1 | tee AutoTenezOutputReservation.txt"
 
-    p = Popen(make_reservation_tomorrow_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate()
-    output = str(stdout)
+    # Also here the community ID is hardcoded
+    r = requests.get("https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" \
+        + str(date_tomorrow) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + your_external_reference + "," + other_players_external_references, \
+        headers=headers, cookies=cookies)
     
-    # A reponse with no content is returned if the reservation was successful
-    valid_output = "HTTP/1.1 204 No Content"
-    if (output.find(valid_output) == 0):
+    # We expect a status code 204 No Content, with of course no content
+    if (r.status_code == 204) and (len(r.content) == 0):
         print("Successfully made the reservation! With md5slotkey " + md5slotkey)
     else:
-        print("Failed to make the reservation with md5slotkey " + md5slotkey)
+        print("Failed to make the reservation with md5slotkey " + md5slotkey + ". Server returned status code: " + r.status_code())
 
 ###############
 
@@ -133,181 +137,130 @@ if (not email_address) or (not password):
     print("ERROR! Enter your email address and password")
     sys.exit(0)
 
-if (only_retrieve_clubapp_id == False) and ((not your_clubapp_id) or (not friend1_clubapp_id)):
-    print("ERROR! Fill out the Clubapp IDs")
+if (only_retrieve_your_external_reference == False) and (not player2_external_reference):
+    print("ERROR! Fill out the external reference of at least one other player")
     sys.exit(0)
 
 # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
 date_tomorrow = date.today() + timedelta(days=1)
-if (only_retrieve_clubapp_id == False) and (str(date_tomorrow) != reservation_date):
+if (only_retrieve_your_external_reference == False) and (str(date_tomorrow) != reservation_date):
     print("INFO! Chosen date (" + reservation_date + ") is not yet tomorrow ("+ str(date_tomorrow) +").")
     sys.exit(0)
 
-# Prepare friends clubadd IDs to send with some of the requests
-if (friend1_clubapp_id and friend2_clubapp_id and friend3_clubapp_id):
-    friends_clubapp_ids = friend1_clubapp_id + "," + friend2_clubapp_id + "," + friend3_clubapp_id
-elif (friend1_clubapp_id and friend2_clubapp_id):
-    friends_clubapp_ids = friend1_clubapp_id + "," + friend2_clubapp_id
+# Prepare other player's external references to send with some of the requests
+if (player2_external_reference and player3_external_reference and player4_external_reference):
+    other_players_external_references = player2_external_reference + "," + player3_external_reference + "," + player4_external_reference
+elif (player2_external_reference and player3_external_reference):
+    other_players_external_references = player2_external_reference + "," + player3_external_reference
 else:
     # It's anyway only possible to reserve a court with at least 2 people or more
-    friends_clubapp_ids = friend1_clubapp_id
+    other_players_external_references = player2_external_reference
 
-awselb_cookie = ""
-awselbcors_cookie = ""
+try:
+    headers = {
+        "Host": "api.socie.nl",
+        "AppBundle": "nl.tizin.socie.tennis",
+        "Accept": "application/json",
+        "appVersion": "3.11.0",
+        "Accept-Language": "en-us",
+        "Cache-Control": "no-cache",
+        "PLatform": "iOS",
+        "Accept-Encoding": "gzip, deflate",
+        "Language": "en-NL",
+        "User-AGent": "ClubApp/237 CFNetwork/1209 Darwin/20.2.0",
+        "Connection": "close",
+        "Content-Type": "application/json",
+    }
+    r = requests.get("https://api.socie.nl/public/pling", headers=headers)
+    cookies = r.cookies
 
-# Retrieve the cookies first. They are apparently necessary to perform a valid request to the server
-if (not awselb_cookie) or (not awselbcors_cookie):
-    try:
-        print("Retrieving cookies...")
-        retrieve_cookies_cli_cmd = "curl -i -s -k -X $'GET' \
-            -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-            $'https://api.socie.nl/public/ping'"
+except ValueError as e:
+    print("ERROR! Failed to retrieve the cookies. Could not parse the response")
+    print(e)
+    sys.exit(-1)
 
-        p = Popen(retrieve_cookies_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = p.communicate()
-        output = str(stdout)
-        
-        # Parse the cookies from the response
-        # AWS ELB cookie
-        begin_awselb_cookie = output.index("AWSELB=")
-        end_awselb_cookie = begin_awselb_cookie + 138 # Cookie length is 138 characters
-        awselb_cookie = output[begin_awselb_cookie:end_awselb_cookie]
-        
-        # The AWS ELB CORS cookie is probably the same, but just retrieve as well it to be sure
-        begin_awselbcors_cookie = output.index("AWSELBCORS=")
-        end_awselbcors_cookie = begin_awselbcors_cookie + 138 # Cookie length is 138 characters
-        awselbcors_cookie = output[begin_awselbcors_cookie:end_awselbcors_cookie]
-
-    except ValueError as e:
-        print("ERROR! Failed to retrieve the cookies. Could not parse the response")
-        print(e)
-        print(stderr)
-        sys.exit(-1)
-
-    except Exception as e:
-        print("ERROR! An unknown error occurred while trying to retrieve the cookies")
-        print(e)
-        print(stderr)
-        sys.exit(-1)
+except Exception as e:
+    print("ERROR! An unexpected error occurred while trying to retrieve the cookies")
+    print(e)
+    sys.exit(-1)
 
 # Logging you in
 try:
-    print("Logging in...")
-    login_cli_cmd = "curl -i -s -k -X $'POST' \
-        -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'Content-Length: 83' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'" + awselb_cookie + "; " + awselbcors_cookie + "' \
-        --data-binary $'{\"appType\":\"TENNIS\",\"email\":\""+ email_address + "\",\"password\":\"" + password + "\"}' \
-        $'https://api.socie.nl/login/socie' 2>&1 | tee AutoTenezOutputLogin.txt"
+    print("Logging in as " + email_address + "...")
+    payload = {
+        "appType": "TENNIS",
+        "email": email_address,
+        "password": password,
+    }
 
-    p = Popen(login_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate()
-    output = str(stdout)
-
-    # Remove extranaeous headers
-    tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputLogin.txt > AutoTenezOutputLoginTailed.txt"
-    
-    p = Popen(tail_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate()
-    output = str(stdout)
-
-    # Parse login JSON response
-    with open('AutoTenezOutputLoginTailed.txt') as f:
-        json_data = json.load(f)
-
+    r = requests.post("https://api.socie.nl/login/socie", json=payload, headers=headers, cookies=cookies)
+    response = r.json()
     # Obtain bearer token from the JSON reponse
-    bearer_token = json_data['access_token']
-
-    # Save bearer token to file for later use
-    f = open("AutoTenezOutputBearerToken.txt", "w")
-    f.write(bearer_token)
-    f.close()
+    bearer_token = response['access_token']
+    # Add bearer token to all future requests
+    headers['Authorization'] = "bearer " + bearer_token
 
 # Catch JSONDecodeError
 except ValueError as e: 
     print("ERRROR! Failed to parse the response")
     print(e)
-    print(stderr)
     sys.exit(-1)
 
 except Exception as e:
-    print("ERROR! An unknown error occurred while logging in")
+    print("ERROR! An unexpected error occurred while logging in")
     print(e)
-    print(stderr)
     sys.exit(-1)
 
 try:
-    if (only_retrieve_clubapp_id == True):
-        print("Retrieving your clubapp ID...")
-        # Retrieve user ID, so we can make another call to retrieve your external reference (i.e. clubapp ID)
-        decoded = jwt.decode(bearer_token, options={"verify_signature": False})
-        user_id = str(decoded)[166:190] # No comment...
-        
-        get_external_reference_cli_cmd = "curl -i -s -k -X $'GET' \
-        -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'Accept-Encoding: gzip, deflate' -H $'Language: en-NL' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'" + awselb_cookie + "; " + awselbcors_cookie + "' \
-        $'https://api.socie.nl/v2/me/communities/5a250a75d186db12a00f1def/memberships/" + user_id + "' 2>&1 | tee AutoTenezOutputGetExternalReference.txt"
+    print("Retrieving necessary IDs...")
+    # Retrieve membership ID, which is included in the bearer token, so we can make another call to retrieve your external reference
+    decoded = jwt.decode(bearer_token, options={"verify_signature": False})
+    # Loop through all roles. Which is usually just one role
+    for role in decoded['roles']:
+        role_hash = role
+    
+    # When we found the role hash, we can loop through the next list, of which the key is the user ID
+    for membership_hash in decoded['roles'][role_hash]:
+        membership_id = membership_hash
 
-        p = Popen(get_external_reference_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = p.communicate()
-        output = str(stdout)
+    # Add membership ID to all future requests
+    headers['membership_id'] = membership_id
 
-        # Remove extranaeous headers
-        tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputGetExternalReference.txt > AutoTenezOutputGetExternalReferenceTailed.txt"
-        
-        p = Popen(tail_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = p.communicate()
-        output = str(stdout)
-
-        # Parse JSON response
-        with open('AutoTenezOutputGetExternalReferenceTailed.txt') as f:
-            json_data = json.load(f)
-
-        print("Your clubapp ID is:")
-        print(json_data['extraFields']['externalReference'])
+    # Community ID is hardcoded because it is always the same for this case
+    r = requests.get("https://api.socie.nl/v2/me/communities/5a250a75d186db12a00f1def/memberships/" + membership_id, headers=headers, cookies=cookies)
+    response = r.json()
+    # Then, your external reference ID will be burried in the response.
+    your_external_reference = response['extraFields']['externalReference']
+    print(" - Your external reference is: " + response['extraFields']['externalReference'])
+    if (only_retrieve_your_external_reference == True):
         sys.exit(0)
 
+    print(" - Your membership ID is: " + membership_id)
+    
 # Catch JSONDecodeError
 except ValueError as e: 
-    print("ERRROR! Failed to parse the response while retrieving your clubapp ID. Please check the response in the log file. Note: stderr is not printed.")
+    print("ERRROR! Failed to parse the response while retrieving the necessary IDs")
     print(e)
-    print(stderr)
     sys.exit(-1)
    
 except Exception as e:
-    print("ERROR! An unknown error occurred while retrieving your clubapp ID")
+    print("ERROR! An unexpected error occurred while retrieving the necessary IDs")
     print(e)
-    print(stderr)
     sys.exit(-1)
 
 try:
     # Retrieve slots for tomorrow
     print("Retrieving time slots for tomorrow...")
     time.sleep(1) # Lets not stress the server too much
-    get_slots_tomorrow_cli_cmd = "curl -i -s -k -X $'GET' \
-        -H $'Host: api.socie.nl' -H $'AppBundle: nl.tizin.socie.tennis' -H $'Accept: application/json' -H $'Authorization: bearer " + bearer_token + "' -H $'appVersion: 3.11.0' -H $'Accept-Language: en-us' -H $'Cache-Control: no-cache' -H $'Platform: iOS' -H $'membership_id: 5d635eee1ea4c97b221c58fc' -H $'Language: en-NL' -H $'Accept-Encoding: gzip, deflate' -H $'User-Agent: ClubApp/237 CFNetwork/1209 Darwin/20.2.0' -H $'Connection: close' -H $'Content-Type: application/json' \
-        -b $'" + awselb_cookie + "; " + awselbcors_cookie + "' \
-        $'https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" + str(date_tomorrow) + "&externalReferences=" + your_clubapp_id + "," + friends_clubapp_ids + ",' 2>&1 | tee AutoTenezOutputSlots.txt"
 
-    # Retrieve all available courts for tomorrow
-    p = Popen(get_slots_tomorrow_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate()
-    output = str(stdout)
-
-    # Remove extranaeous headers
-    tail_cli_cmd = "tail -n +" + lines_to_tail + " AutoTenezOutputSlots.txt > AutoTenezOutputSlotsTailed.txt"
-    
-    p = Popen(tail_cli_cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate()
-    output = str(stdout)
-
-    # Parse JSON response
-    with open('AutoTenezOutputSlotsTailed.txt') as f:
-        json_data = json.load(f)
+    r = requests.get("https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" \
+            + str(date_tomorrow) + "&externalReferences=" + membership_id + "," + other_players_external_references, headers=headers, cookies=cookies)
+    response = r.json()
 
     available_slots = []
     # Loop through all courts: 0 - 12 in our case
     for court_no in range(0, 12):
-        slots = json_data['locations'][court_no]['slots']
+        slots = response['locations'][court_no]['slots']
         # Every time slot has slots
         for slot in slots:
             # Only the courts which are available to reserve, have slot keys. Makes life easy for us
@@ -321,23 +274,24 @@ try:
 
 # Catch JSONDecodeError
 except ValueError as e: 
-    print("ERRROR! Failed to parse the response while retrieving the available slots. Please check the response in the log file. Note: stderr is not printed.")
+    print("ERRROR! Failed to parse the response while retrieving the available slots")
     print(e)
-    print(stderr)
     sys.exit(-1)
    
 except Exception as e:
-    print("ERROR! An unknown error occurred while retrieving your clubapp ID")
+    print("ERROR! An unexpected error occurred while retrieving the available slots")
     print(e)
-    print(stderr)
     sys.exit(-1)
 
 try:
     # Find available time slots
     print("Finding available time slots for your first choice...")
-    first_choice_no_slots, first_choice_first_slotkey, first_choice_second_slotkey = find_time_slot(available_slots, first_choice_first_hour, first_choice_second_hour, first_choice_courts)
+    first_choice_no_slots, first_choice_first_slotkey, first_choice_second_slotkey = \
+        find_time_slot(available_slots, first_choice_first_hour, first_choice_second_hour, first_choice_courts)
+    
     print("Finding available time slots for your second choice...")
-    second_choice_no_slots, second_choice_first_slotkey, second_choice_second_slotkey = find_time_slot(available_slots, second_choice_first_hour, second_choice_second_hour, second_choice_courts)
+    second_choice_no_slots, second_choice_first_slotkey, second_choice_second_slotkey = \
+        find_time_slot(available_slots, second_choice_first_hour, second_choice_second_hour, second_choice_courts)
 
     first_md5slotkey = ""
     second_md5slotkey = ""
@@ -361,9 +315,10 @@ try:
             second_md5slotkey = first_choice_second_slotkey
     else:
         print("There are no time slots available")
+        sys.exit(0)
 
 except Exception as e:
-    print("ERROR! An unknown error occurred while finding the best time slot")
+    print("ERROR! An unexpected error occurred while finding the best time slot")
     sys.exit(-1)
 
 if (dryrun):
@@ -373,12 +328,13 @@ if (dryrun):
 try:
     if (first_md5slotkey):
         print("Make the reservation for the first time slot...")
-        make_reservation(bearer_token, date_tomorrow, first_md5slotkey, your_clubapp_id, friends_clubapp_ids)
+        make_reservation(headers, cookies, date_tomorrow, first_md5slotkey, your_external_reference, other_players_external_references)
 
     if (second_md5slotkey):
         print("Make the reservation for the second time slot...")
-        make_reservation(bearer_token, date_tomorrow, second_md5slotkey, your_clubapp_id, friends_clubapp_ids)
+        make_reservation(headers, cookies, date_tomorrow, second_md5slotkey, your_external_reference, other_players_external_references)
 
 except Exception as e:
-    print("ERROR! An unknown error occurred while making the reservation")
+    print("ERROR! An unexpected error occurred while making the reservation")
+    print(e)
     sys.exit(-1)
