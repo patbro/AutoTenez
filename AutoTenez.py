@@ -141,9 +141,62 @@ if (only_retrieve_your_external_reference == False) and (not player2_external_re
     print("ERROR! Fill out the external reference of at least one other player")
     sys.exit(0)
 
+# Parse input arguments
+parser = argparse.ArgumentParser(description='Reserve tennis court for tomorrow.')
+parser.add_argument('-c',  '--courts',               nargs='+', help='Courts you would like to play as "Baan X", where X is the court number. Default setting is all courts.')
+parser.add_argument('-d',  '--date',                            help='Specify the date to make the reservation (yyyy-mm-dd)')
+parser.add_argument('-t2', '--time_second_choice',   nargs='+', help='Time you would like to reserve, as a second option (hh:mm).')
+parser.add_argument('-c2', '--courts_second_choice', nargs='+', help='Courts you would like to play, as the second option (Baan X, where X is the court number).')
+
+required_arguments = parser.add_argument_group('Required arguments')
+required_arguments.add_argument('-t', '--time',    nargs='+', help="Time you would to you reserve. One or two consecutive times are allowed (hh:mm).", required=True)
+required_arguments.add_argument('-f', '--friends', nargs='+', help="With whom you would like to play. 1-3 additional players allowed.", required=True)
+
+args = parser.parse_args()
+
+print("Friends: ")
+print(args.friends)
+print("Reservation date: ")
+print(args.date)
+print("Time: ")
+print(args.time)
+print("Courts: ")
+print(args.courts)
+print("Time (second choice):")
+print(args.time_second_choice)
+print("Courts (second choice):")
+print(args.courts_second_choice)
+
+player2_external_reference = args.friends[0]
+if len(args.friends) > 1:
+    player3_external_reference = args.friends[1]
+if len(args.friends) > 2:
+    player4_external_reference = args.friends[2]
+
+reservation_date = args.date
+
+first_choice_first_hour = args.time[0]
+if len(args.time) > 1:
+    first_choice_second_hour = args.time[1]
+
+if args.courts:
+    first_choice_courts = args.courts
+else:
+    first_choice_courts = []
+
+if args.time_second_choice:
+    second_choice_first_hour = args.time[0]
+    if len(args.time_second_choice) > 1:
+         second_choice_second_hour = args.time[1]
+
+if args.courts_second_choice:
+    first_choice_courts = args.courts_second_choice
+else:
+    second_choice_courts = [] # Either specify courts ("Baan X", where X is the court number) or []
+
 # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
 date_tomorrow = date.today() + timedelta(days=1)
-if (only_retrieve_your_external_reference == False) and (str(date_tomorrow) != reservation_date):
+if reservation_date and (only_retrieve_your_external_reference == False) and (str(date_tomorrow) != reservation_date):
     print("INFO! Chosen date (" + reservation_date + ") is not yet tomorrow ("+ str(date_tomorrow) +").")
     sys.exit(0)
 
