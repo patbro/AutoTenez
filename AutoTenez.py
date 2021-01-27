@@ -154,19 +154,6 @@ required_arguments.add_argument('-f', '--friends', nargs='+', help="With whom yo
 
 args = parser.parse_args()
 
-print("Friends: ")
-print(args.friends)
-print("Reservation date: ")
-print(args.date)
-print("Time: ")
-print(args.time)
-print("Courts: ")
-print(args.courts)
-print("Time (second choice):")
-print(args.time_second_choice)
-print("Courts (second choice):")
-print(args.courts_second_choice)
-
 player2_external_reference = args.friends[0]
 if len(args.friends) > 1:
     player3_external_reference = args.friends[1]
