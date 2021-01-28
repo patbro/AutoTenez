@@ -8,6 +8,7 @@ import json
 import jwt
 import sys
 import requests
+import argparse
 
 ###################################################
 
@@ -17,6 +18,7 @@ password = "" # Your password in plain-text
 only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
 dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
+# Variables to be (optionally) filled in by input arguments
 player2_external_reference = "" # External reference of friend who you are reserving the court with
 player3_external_reference = "" # Idem
 player4_external_reference = "" # Idem. If you have this many friends
@@ -143,10 +145,10 @@ if (only_retrieve_your_external_reference == False) and (not player2_external_re
 
 # Parse input arguments
 parser = argparse.ArgumentParser(description='Reserve tennis court for tomorrow.')
-parser.add_argument('-c',  '--courts',               nargs='+', help='Courts you would like to play as "Baan X", where X is the court number. Default setting is all courts.')
+parser.add_argument('-c',  '--courts',               nargs='+', help='Specify courts ("Baan X", where X is the court number). Default setting is all courts.')
 parser.add_argument('-d',  '--date',                            help='Specify the date to make the reservation (yyyy-mm-dd)')
-parser.add_argument('-t2', '--time_second_choice',   nargs='+', help='Time you would like to reserve, as a second option (hh:mm).')
-parser.add_argument('-c2', '--courts_second_choice', nargs='+', help='Courts you would like to play, as the second option (Baan X, where X is the court number).')
+parser.add_argument('-t2', '--time_second_choice',   nargs='+', help='Time you would like to reserve for the second option (hh:mm).')
+parser.add_argument('-c2', '--courts_second_choice', nargs='+', help='Specify courts for the second option.')
 
 required_arguments = parser.add_argument_group('Required arguments')
 required_arguments.add_argument('-t', '--time',    nargs='+', help="Time you would to you reserve. One or two consecutive times are allowed (hh:mm).", required=True)
