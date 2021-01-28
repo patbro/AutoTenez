@@ -25,11 +25,11 @@ player4_external_reference = "" # Idem. If you have this many friends
 
 reservation_date = "2021-01-25" # Specify the date to make the reservation (yyyy-mm-dd)
 
-first_choice_first_hour = "08:30" # Either specify a time or None (hh:mm)
-first_choice_second_hour = "09:30" # Either specify a time or None (hh:mm)
-first_choice_courts = ["Baan 1", "Baan 2", "Baan 3", "Baan 4"] # Either specify courts ("Baan X", where X is the court number) or []
+first_choice_first_hour = None # Either specify a time or None (hh:mm)
+first_choice_second_hour = None # Either specify a time or None (hh:mm)
+first_choice_courts = [] # Either specify courts ("Baan X", where X is the court number) or []
 
-second_choice_first_hour = "08:00" # Either specify a time or None (hh:mm)
+second_choice_first_hour = None # Either specify a time or None (hh:mm)
 second_choice_second_hour = None # Either specify a time or None (hh:mm)
 second_choice_courts = [] # Either specify courts ("Baan X", where X is the court number) or []
 
@@ -139,10 +139,6 @@ if (not email_address) or (not password):
     print("ERROR! Enter your email address and password")
     sys.exit(0)
 
-if (only_retrieve_your_external_reference == False) and (not player2_external_reference):
-    print("ERROR! Fill out the external reference of at least one other player")
-    sys.exit(0)
-
 # Parse input arguments
 parser = argparse.ArgumentParser(description='Reserve tennis court for tomorrow.')
 parser.add_argument('-c',  '--courts',               nargs='+', help='Specify courts ("Baan X", where X is the court number). Default setting is all courts.')
@@ -182,6 +178,11 @@ if args.courts_second_choice:
     first_choice_courts = args.courts_second_choice
 else:
     second_choice_courts = [] # Either specify courts ("Baan X", where X is the court number) or []
+
+# Verify
+if (only_retrieve_your_external_reference == False) and (not player2_external_reference):
+    print("ERROR! Fill out the external reference of at least one other player")
+    sys.exit(0)
 
 # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
 date_tomorrow = date.today() + timedelta(days=1)
