@@ -231,12 +231,12 @@ class AutoTenez:
 
         return False
 
-    def make_reservation(self, date_tomorrow, md5slotkey, other_players_external_references):
+    def make_reservation(self, reservation_date, md5slotkey, other_players_external_references):
         time.sleep(1) # Lets not stress the server too much
 
         # Also here the community ID is hardcoded
         r = requests.get("https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" \
-            + str(date_tomorrow) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + self.your_external_reference + "," + other_players_external_references, \
+            + str(reservation_date) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + self.your_external_reference + "," + other_players_external_references, \
             headers=self.headers, cookies=self.cookies)
         
         # We expect a status code 204 No Content, with of course no content
@@ -362,11 +362,11 @@ if __name__ == "__main__":
         
         if (first_md5slotkey):
             print("Make the reservation for the first time slot...")
-            auto_tenez.make_reservation(date_tomorrow, first_md5slotkey, other_players_external_references)
+            auto_tenez.make_reservation(reservation_date, first_md5slotkey, other_players_external_references)
 
         if (second_md5slotkey):
             print("Make the reservation for the second time slot...")
-            auto_tenez.make_reservation(date_tomorrow, second_md5slotkey, other_players_external_references)
+            auto_tenez.make_reservation(reservation_date, second_md5slotkey, other_players_external_references)
 
     except KeyboardInterrupt:
         print("\r\nKeyboard interrupt")
