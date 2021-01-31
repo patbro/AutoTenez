@@ -20,11 +20,11 @@ class ParsingResponseFailed(AutoTenezException):
         self.headers = headers
         self.content = content
         self.exception = original_exception
+        self.message = message
         super().__init__(self.message)
 
     def __str__(self):
-        return f"""{self.message} -> {self.exception} \r\n 
-            Status code: {self.status_code} \r\nHeaders: {self.headers} \r\nContent: {self.content}"""
+        return f"""{self.message} -> {self.exception} \r\nStatus code: {self.status_code} \r\nHeaders: {self.headers} \r\nContent: {self.content}"""
 
 class AutoTenez:
     email_address = "" # Your email address
@@ -52,7 +52,11 @@ class AutoTenez:
         "Content-Type": "application/json",
     }
 
-    def __init__(self, player2_external_reference, player3_external_reference, player4_external_reference):
+    def __init__(self, reservation_date, player2_external_reference, player3_external_reference, player4_external_reference):
+        # Override class' reservation date if specified
+        if (reservation_date):
+            self.reservation_date = reservation_date
+
         # AutoTenez sanity checks
         if (not self.email_address) or (not self.password):
             raise AutoTenezException("Make sure to enter your email address and password")
@@ -61,7 +65,7 @@ class AutoTenez:
             raise AutoTenezException("Fill out the external reference of at least one other player")
 
         # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
-        if self.reservation_date and (auto_tenez.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
+        if self.reservation_date and (self.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
             raise AutoTenezException("Chosen date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
 
         # Prepare other player's external references to send with some of the requests
@@ -74,15 +78,17 @@ class AutoTenez:
             self.other_players_external_references = player2_external_reference
 
         # Retrieve all necessary information
-        auto_tenez.retrieve_cookies() # Retrieve the necessary cookies (mainly just for AWS services)
-        auto_tenez.login()
-        auto_tenez.retrieve_necessary_ids() # Retrieve necessary IDs to perform reservations
+        self.retrieve_cookies() # Retrieve the necessary cookies (mainly just for AWS services)
+        self.login()
+        self.retrieve_necessary_ids() # Retrieve necessary IDs to perform reservations
 
     def retrieve_cookies(self):
         try:
             r = requests.get("https://api.socie.nl/public/pling", headers=self.headers)
             # Add cookies to all feature requests
             self.cookies = r.cookies
+            e = ""
+            raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to retrieve the cookies")
 
         except ValueError as e:
             raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to retrieve the cookies")
@@ -96,7 +102,7 @@ class AutoTenez:
                 "password": self.password,
             }
 
-            r = requests.post("https://api.socie.nl/login/socie", json=payload, headers=self.headers, cookies=cookies)
+            r = requests.post("https://api.socie.nl/login/socie", json=payload, headers=self.headers, cookies=self.cookies)
             response = r.json()
             # Obtain bearer token from the JSON reponse (later used in `retrieve_necessary_ids`)
             self.bearer_token = response['access_token']
@@ -272,7 +278,7 @@ if __name__ == "__main__":
         parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd). Defaults to `reservation_date`.')
         parser.add_argument('-t2', '--time_second_choice',   nargs='+',     help='Time you would like to reserve for the second option (hh:mm).')
         parser.add_argument('-c2', '--courts_second_choice', nargs='+',     help='Specify courts for the second option.')
-        parser.add_argument('-d',  '--dryrun',               default=False, help="Pass as an argument to only check available time slots, but don't make a reservation.")
+        parser.add_argument(       '--dryrun',               default=False, help="Pass as an argument to only check available time slots, but don't make a reservation.")
 
         required_arguments = parser.add_argument_group('Required arguments')
         required_arguments.add_argument('-t', '--time',    nargs='+', help="Time you would to you reserve. One or two consecutive times are allowed (hh:mm).", required=True)
@@ -282,6 +288,8 @@ if __name__ == "__main__":
 
         # Process input arguments
         player2_external_reference = args.friends[0]
+        player3_external_reference = ""
+        player4_external_reference = ""
         if len(args.friends) > 1:
             player3_external_reference = args.friends[1]
         if len(args.friends) > 2:
@@ -291,28 +299,29 @@ if __name__ == "__main__":
             reservation_date = args.date
 
         first_choice_first_hour = args.time[0]
+        first_choice_second_hour = ""
         if len(args.time) > 1:
             first_choice_second_hour = args.time[1]
 
+        first_choice_courts = []
         if args.courts:
             first_choice_courts = args.courts
-        else:
-            first_choice_courts = []
 
+        second_choice_first_hour = ""
+        second_choice_second_hour = ""
         if args.time_second_choice:
             second_choice_first_hour = args.time[0]
             if len(args.time_second_choice) > 1:
                 second_choice_second_hour = args.time[1]
 
+        second_choice_courts = []
         if args.courts_second_choice:
             second_choice_courts = args.courts_second_choice
-        else:
-            second_choice_courts = []
 
         dryrun = args.dryrun
 
         # Init AutoTenez class
-        auto_tenez = AutoTenez(player2_external_reference, player3_external_reference, player4_external_reference)
+        auto_tenez = AutoTenez(reservation_date, player2_external_reference, player3_external_reference, player4_external_reference)
 
         # Retrieve all time slots
         slots = auto_tenez.retrieve_slots()
@@ -366,6 +375,12 @@ if __name__ == "__main__":
         print("\r\nKeyboard interrupt")
         sys.exit(-1)
 
+    except AutoTenezException as e:
+        print("An AutoTenez exception occurred!")
+        print(e)
+        sys.exit(-1)
+
     except Exception as e:
+        print("An unexpected error occurred!")
         print(e)
         sys.exit(-1)
