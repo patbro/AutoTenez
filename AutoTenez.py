@@ -21,6 +21,8 @@ class AutoTenez:
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
+    reservation_date = "2021-01-31" # Fixed date to make the reservation. Can be overwritten from the command line
+
     def __init__(self):
         return
 
@@ -124,7 +126,7 @@ if __name__ == "__main__":
         # Parse input arguments
         parser = argparse.ArgumentParser(description='Reserve tennis court for tomorrow.')
         parser.add_argument('-c',  '--courts',               nargs='+', help='Specify courts ("Baan X", where X is the court number). Default setting is all courts.')
-        parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd).')
+        parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd). Defaults to `reservation_date`.')
         parser.add_argument('-t2', '--time_second_choice',   nargs='+',     help='Time you would like to reserve for the second option (hh:mm).')
         parser.add_argument('-c2', '--courts_second_choice', nargs='+',     help='Specify courts for the second option.')
         parser.add_argument('-d',  '--dryrun',               default=False, help="Pass as an argument to only check available time slots, but don't make a reservation.")
@@ -142,7 +144,8 @@ if __name__ == "__main__":
         if len(args.friends) > 2:
             player4_external_reference = args.friends[2]
 
-        reservation_date = args.date
+        if (args.date):
+            reservation_date = args.date
 
         first_choice_first_hour = args.time[0]
         if len(args.time) > 1:
@@ -159,10 +162,10 @@ if __name__ == "__main__":
                 second_choice_second_hour = args.time[1]
 
         if args.courts_second_choice:
-            first_choice_courts = args.courts_second_choice # TODO
+            second_choice_courts = args.courts_second_choice
         else:
             second_choice_courts = []
-        
+
         dryrun = args.dryrun
 
         # Init AutoTenez class
