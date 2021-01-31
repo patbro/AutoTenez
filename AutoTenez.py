@@ -354,11 +354,11 @@ if __name__ == "__main__":
                 second_md5slotkey = first_choice_second_slotkey
         else:
             print("There are no time slots available")
-            sys.exit(0)
 
-        if (dryrun):
+        if (dryrun) and (first_md5slotkey or second_md5slotkey):
             print("Not making a reservation because dryrun is set to True")
-            sys.exit(0)
+            first_md5slotkey = ""
+            second_md5slotkey = ""
         
         if (first_md5slotkey):
             print("Make the reservation for the first time slot...")
@@ -372,5 +372,6 @@ if __name__ == "__main__":
         print("\r\nKeyboard interrupt")
         sys.exit(-1)
 
-    except:
+    except Exception as e:
+        print(e)
         sys.exit(-1)
