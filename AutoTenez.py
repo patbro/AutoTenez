@@ -26,12 +26,6 @@ class ParsingResponseFailed(AutoTenezException):
         return f"""{self.message} -> {self.exception} \r\n 
             Status code: {self.status_code} \r\nHeaders: {self.headers} \r\nContent: {self.content}"""
 
-# AutoTenez class
-# Correct order to call the functions:
-# 1) Retrieve cookies
-# 2) Login (to retrieve the bearer token)
-# 3) Find time slot
-# 4) 
 class AutoTenez:
     email_address = "" # Your email address
     password = "" # Your password in plain-text
@@ -41,7 +35,8 @@ class AutoTenez:
 
     reservation_date = "2021-01-31" # Fixed date to make the reservation. Can be overwritten from the command line
 
-    # No need to change the headers
+    ### Internal AutoTenez variables ###
+    date_tomorrow = date.today() + timedelta(days=1)
     headers = {
         "Host": "api.socie.nl",
         "AppBundle": "nl.tizin.socie.tennis",
@@ -57,8 +52,31 @@ class AutoTenez:
         "Content-Type": "application/json",
     }
 
-    def __init__(self):
-        return
+    def __init__(self, player2_external_reference, player3_external_reference, player4_external_reference):
+        # AutoTenez sanity checks
+        if (not self.email_address) or (not self.password):
+            raise AutoTenezException("Make sure to enter your email address and password")
+        
+        if (self.only_retrieve_your_external_reference == False) and (not player2_external_reference):
+            raise AutoTenezException("Fill out the external reference of at least one other player")
+
+        # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
+        if self.reservation_date and (auto_tenez.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
+            raise AutoTenezException("Chosen date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
+
+        # Prepare other player's external references to send with some of the requests
+        if (player2_external_reference and player3_external_reference and player4_external_reference):
+            self.other_players_external_references = player2_external_reference + "," + player3_external_reference + "," + player4_external_reference
+        elif (player2_external_reference and player3_external_reference):
+            self.other_players_external_references = player2_external_reference + "," + player3_external_reference
+        else:
+            # It's anyway only possible to reserve a court with at least 2 people or more
+            self.other_players_external_references = player2_external_reference
+
+        # Retrieve all necessary information
+        auto_tenez.retrieve_cookies() # Retrieve the necessary cookies (mainly just for AWS services)
+        auto_tenez.login()
+        auto_tenez.retrieve_necessary_ids() # Retrieve necessary IDs to perform reservations
 
     def retrieve_cookies(self):
         try:
@@ -127,7 +145,7 @@ class AutoTenez:
             time.sleep(1) # Lets not stress the server too much
 
             r = requests.get("https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" \
-                    + str(date_tomorrow) + "&externalReferences=" + self.membership_id + "," + other_players_external_references, headers=self.headers, cookies=self.cookies)
+                    + str(self.date_tomorrow) + "&externalReferences=" + self.membership_id + "," + self.other_players_external_references, headers=self.headers, cookies=self.cookies)
             response = r.json()
 
             slots = []
@@ -231,12 +249,12 @@ class AutoTenez:
 
         return False
 
-    def make_reservation(self, reservation_date, md5slotkey, other_players_external_references):
+    def make_reservation(self, reservation_date, md5slotkey):
         time.sleep(1) # Lets not stress the server too much
 
         # Also here the community ID is hardcoded
         r = requests.get("https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" \
-            + str(reservation_date) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + self.your_external_reference + "," + other_players_external_references, \
+            + str(reservation_date) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + self.your_external_reference + "," + self.other_players_external_references, \
             headers=self.headers, cookies=self.cookies)
         
         # We expect a status code 204 No Content, with of course no content
@@ -250,7 +268,7 @@ if __name__ == "__main__":
     try:
         # Parse input arguments
         parser = argparse.ArgumentParser(description='Reserve tennis court for tomorrow.')
-        parser.add_argument('-c',  '--courts',               nargs='+', help='Specify courts ("Baan X", where X is the court number). Default setting is all courts.')
+        parser.add_argument('-c',  '--courts',               nargs='+',     help='Specify courts ("Baan X", where X is the court number). Default setting is all courts.')
         parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd). Defaults to `reservation_date`.')
         parser.add_argument('-t2', '--time_second_choice',   nargs='+',     help='Time you would like to reserve for the second option (hh:mm).')
         parser.add_argument('-c2', '--courts_second_choice', nargs='+',     help='Specify courts for the second option.')
@@ -294,33 +312,9 @@ if __name__ == "__main__":
         dryrun = args.dryrun
 
         # Init AutoTenez class
-        auto_tenez = AutoTenez()
+        auto_tenez = AutoTenez(player2_external_reference, player3_external_reference, player4_external_reference)
 
-        # AutoTenez sanity checks
-        if (not auto_tenez.email_address) or (not auto_tenez.password):
-            raise AutoTenezException("Make sure to enter your email address and password")
-        
-        if (auto_tenez.only_retrieve_your_external_reference == False) and (not player2_external_reference):
-            raise AutoTenezException("ERROR! Fill out the external reference of at least one other player")
-
-        # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
-        date_tomorrow = date.today() + timedelta(days=1)
-        if reservation_date and (auto_tenez.only_retrieve_your_external_reference == False) and (str(date_tomorrow) != reservation_date):
-            raise AutoTenezException("Chosen date (" + reservation_date + ") is not yet tomorrow ("+ str(date_tomorrow) +").")
-
-        # Prepare other player's external references to send with some of the requests
-        if (player2_external_reference and player3_external_reference and player4_external_reference):
-            other_players_external_references = player2_external_reference + "," + player3_external_reference + "," + player4_external_reference
-        elif (player2_external_reference and player3_external_reference):
-            other_players_external_references = player2_external_reference + "," + player3_external_reference
-        else:
-            # It's anyway only possible to reserve a court with at least 2 people or more
-            other_players_external_references = player2_external_reference
-
-        # Retrieve all necessary information
-        auto_tenez.retrieve_cookies() # Retrieve the necessary cookies (mainly just for AWS services)
-        auto_tenez.login()
-        auto_tenez.retrieve_necessary_ids() # Retrieve necessary IDs to perform reservations
+        # Retrieve all time slots
         slots = auto_tenez.retrieve_slots()
 
         # Find available time slots
@@ -362,11 +356,11 @@ if __name__ == "__main__":
         
         if (first_md5slotkey):
             print("Make the reservation for the first time slot...")
-            auto_tenez.make_reservation(reservation_date, first_md5slotkey, other_players_external_references)
+            auto_tenez.make_reservation(reservation_date, first_md5slotkey)
 
         if (second_md5slotkey):
             print("Make the reservation for the second time slot...")
-            auto_tenez.make_reservation(reservation_date, second_md5slotkey, other_players_external_references)
+            auto_tenez.make_reservation(reservation_date, second_md5slotkey)
 
     except KeyboardInterrupt:
         print("\r\nKeyboard interrupt")
