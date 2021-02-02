@@ -53,6 +53,7 @@ class AutoTenez:
     }
 
     def __init__(self, reservation_date, player2_external_reference, player3_external_reference, player4_external_reference):
+        print("Initializing AutoTenez at " + str(datetime.now()))
         # Override class' reservation date if specified
         if (reservation_date):
             self.reservation_date = reservation_date
@@ -87,8 +88,6 @@ class AutoTenez:
             r = requests.get("https://api.socie.nl/public/pling", headers=self.headers)
             # Add cookies to all feature requests
             self.cookies = r.cookies
-            e = ""
-            raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to retrieve the cookies")
 
         except ValueError as e:
             raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to retrieve the cookies")
