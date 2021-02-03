@@ -66,17 +66,15 @@ class AutoTenez:
             raise AutoTenezException("Fill out the external reference of at least one other player")
 
         # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
-        if self.reservation_date and (self.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
-            raise AutoTenezException("Chosen date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
+        if (self.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
+            raise AutoTenezException("Chosen reservation date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
 
         # Prepare other player's external references to send with some of the requests
-        if (player2_external_reference and player3_external_reference and player4_external_reference):
-            self.other_players_external_references = player2_external_reference + "," + player3_external_reference + "," + player4_external_reference
-        elif (player2_external_reference and player3_external_reference):
-            self.other_players_external_references = player2_external_reference + "," + player3_external_reference
-        else:
-            # It's anyway only possible to reserve a court with at least 2 people or more
-            self.other_players_external_references = player2_external_reference
+        self.other_players_external_references = player2_external_reference
+        if (player3_external_reference):
+            self.other_players_external_references += "," + player3_external_reference
+        if (player4_external_reference):
+            self.other_players_external_references +=  "," + player4_external_reference
 
         # Retrieve all necessary information
         self.retrieve_cookies() # Retrieve the necessary cookies (mainly just for AWS services)
@@ -294,12 +292,12 @@ if __name__ == "__main__":
         if len(args.friends) > 2:
             player4_external_reference = args.friends[2]
 
-        reservation_date = ""
+        reservation_date = None
         if (args.date):
             reservation_date = args.date
 
         first_choice_first_hour = args.time[0]
-        first_choice_second_hour = ""
+        first_choice_second_hour = None
         if len(args.time) > 1:
             first_choice_second_hour = args.time[1]
 
@@ -307,8 +305,8 @@ if __name__ == "__main__":
         if args.courts:
             first_choice_courts = args.courts
 
-        second_choice_first_hour = ""
-        second_choice_second_hour = ""
+        second_choice_first_hour = None
+        second_choice_second_hour = None
         if args.time_second_choice:
             second_choice_first_hour = args.time[0]
             if len(args.time_second_choice) > 1:
@@ -335,8 +333,8 @@ if __name__ == "__main__":
         second_choice_no_slots, second_choice_first_slotkey, second_choice_second_slotkey = \
             auto_tenez.find_time_slot(slots, second_choice_first_hour, second_choice_second_hour, second_choice_courts)
 
-        first_md5slotkey = ""
-        second_md5slotkey = ""
+        first_md5slotkey = None
+        second_md5slotkey = None
 
         # Reserve the biggest time slot
         if(second_choice_no_slots > first_choice_no_slots):
@@ -360,8 +358,8 @@ if __name__ == "__main__":
 
         if (dryrun) and (first_md5slotkey or second_md5slotkey):
             print("Not making a reservation because dryrun is set to True")
-            first_md5slotkey = ""
-            second_md5slotkey = ""
+            first_md5slotkey = None
+            second_md5slotkey = None
         
         if (first_md5slotkey):
             print("Make the reservation for the first time slot...")
