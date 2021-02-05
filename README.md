@@ -3,7 +3,7 @@ Automates the process of making tennis court reservations for you.
 
 ## Setup
 1. Install all necessary pip dependencies using `python -m pip install -r requirements.txt`.
-2. Open `AutoTenez.py`. Eter your email address, password, and set `only_retrieve_your_external_reference` to `True`.
+2. Open `AutoTenez.py`. Enter your email address, password, and set `only_retrieve_your_external_reference` to `True`.
 3. Run `python AutoTenez.py -t 00:00 -f 0` to retrieve your own external reference.
 4. Share your external reference with a friend, and set `only_retrieve_your_external_reference` to `False`.
 
