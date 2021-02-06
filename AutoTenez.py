@@ -266,7 +266,7 @@ class AutoTenez:
         if (r.status_code == 204) and (len(r.content) == 0):
             print("Successfully made the reservation! With md5slotkey " + md5slotkey)
         else:
-            print("Failed to make the reservation with md5slotkey " + md5slotkey + ". Server returned status code: " + r.status_code())
+            print("Failed to make the reservation with md5slotkey " + md5slotkey + ". Server returned status code: " + r.status_code)
 
 # If ran from command line
 if __name__ == "__main__":
