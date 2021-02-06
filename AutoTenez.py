@@ -33,7 +33,7 @@ class AutoTenez:
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
-    reservation_date = "2021-01-31" # Fixed date to make the reservation. Can be overwritten from the command line
+    reservation_date = None # Sate to make the reservation. Can be set from the command line
 
     ### Internal AutoTenez variables ###
     date_tomorrow = date.today() + timedelta(days=1)
@@ -57,6 +57,8 @@ class AutoTenez:
         # Override class' reservation date if specified
         if (reservation_date):
             self.reservation_date = reservation_date
+        else:
+            self.reservation_date = str(self.date_tomorrow)
 
         # AutoTenez sanity checks
         if (not self.email_address) or (not self.password):
