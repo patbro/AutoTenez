@@ -33,7 +33,7 @@ class AutoTenez:
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
-    reservation_date = "2021-01-31" # Fixed date to make the reservation. Can be overwritten from the command line
+    reservation_date = None # Sate to make the reservation. Can be set from the command line
 
     ### Internal AutoTenez variables ###
     date_tomorrow = date.today() + timedelta(days=1)
@@ -57,6 +57,8 @@ class AutoTenez:
         # Override class' reservation date if specified
         if (reservation_date):
             self.reservation_date = reservation_date
+        else:
+            self.reservation_date = str(self.date_tomorrow)
 
         # AutoTenez sanity checks
         if (not self.email_address) or (not self.password):
@@ -264,7 +266,7 @@ class AutoTenez:
         if (r.status_code == 204) and (len(r.content) == 0):
             print("Successfully made the reservation! With md5slotkey " + md5slotkey)
         else:
-            print("Failed to make the reservation with md5slotkey " + md5slotkey + ". Server returned status code: " + r.status_code())
+            print("Failed to make the reservation with md5slotkey " + md5slotkey + ". Server returned status code: " + r.status_code)
 
 # If ran from command line
 if __name__ == "__main__":
@@ -273,13 +275,13 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description='Reserve tennis court for tomorrow.')
         parser.add_argument('-c',  '--courts',               nargs='+',     help='Specify courts ("Baan X", where X is the court number). Default setting is all courts.')
         parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd). Defaults to `reservation_date`.')
-        parser.add_argument('-t2', '--time_second_choice',   nargs='+',     help='Time you would like to reserve for the second option (hh:mm).')
-        parser.add_argument('-c2', '--courts_second_choice', nargs='+',     help='Specify courts for the second option.')
+        parser.add_argument('-t2', '--time_second_choice',   nargs='+',     help='Time you would to you reserve as second option. One or two consecutive times are allowed (hh:mm).')
+        parser.add_argument('-c2', '--courts_second_choice', nargs='+',     help='Specify courts as second option ("Baan X", where X is the court number). Default setting is all courts.')
         parser.add_argument(       '--dryrun',               default=False, help="Pass as an argument to only check available time slots, but don't make a reservation.")
 
         required_arguments = parser.add_argument_group('Required arguments')
         required_arguments.add_argument('-t', '--time',    nargs='+', help="Time you would to you reserve. One or two consecutive times are allowed (hh:mm).", required=True)
-        required_arguments.add_argument('-f', '--friends', nargs='+', help="With whom you would like to play. 1-3 additional players allowed.", required=True)
+        required_arguments.add_argument('-f', '--friends', nargs='+', help="External reference of whom you would like to play with. Minimum of 1 player required, maximum of 3 players allowed.", required=True)
 
         args = parser.parse_args()
 
@@ -291,6 +293,9 @@ if __name__ == "__main__":
             player3_external_reference = args.friends[1]
         if len(args.friends) > 2:
             player4_external_reference = args.friends[2]
+        if len(args.friends) > 3:
+            print("A maximum of 3 external references is allowed, but " + str(len(args.friends)) + " references given: " + ",".join(args.friends))
+            sys.exit(-1)
 
         reservation_date = None
         if (args.date):
