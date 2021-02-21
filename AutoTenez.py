@@ -67,7 +67,7 @@ class AutoTenez:
         if (self.only_retrieve_your_external_reference == False) and (not player2_external_reference):
             raise AutoTenezException("Fill out the external reference of at least one other player")
 
-        # Exit script if tomorrow is not the chosen date yet, so wait to make the reservation
+        # Raise exception if tomorrow is not the chosen date yet, so wait to make the reservation
         if (self.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
             raise AutoTenezException("Chosen reservation date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
 
