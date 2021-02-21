@@ -171,7 +171,7 @@ class AutoTenez:
         response = r.json()
 
         if (len(response) > 0):
-            print("Found " + str(len(response)) + " members using the query: " + query)
+            print("Found " + str(len(response)) + " member(s) using the query: " + query)
             for member in response:
                 print(" - Name: " + member['appendedMembership']['fullName'])
                 print(" - External reference: " + member['appendedMembership']['externalReference'])
