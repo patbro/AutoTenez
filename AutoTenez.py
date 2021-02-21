@@ -295,8 +295,7 @@ if __name__ == "__main__":
         if len(args.friends) > 2:
             player4_external_reference = args.friends[2]
         if len(args.friends) > 3:
-            print("A maximum of 3 external references is allowed, but " + str(len(args.friends)) + " references given: " + ",".join(args.friends))
-            sys.exit(-1)
+            raise AutoTenezException("A maximum of 3 external references is allowed, but " + str(len(args.friends)) + " references given: " + ",".join(args.friends))
 
         reservation_date = None
         if (args.date):
