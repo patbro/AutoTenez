@@ -54,11 +54,12 @@ class AutoTenez:
 
     def __init__(self, reservation_date, player2_external_reference, player3_external_reference, player4_external_reference):
         print("Initializing AutoTenez at " + str(datetime.now()))
-        # Override class' reservation date if specified
+        # Set class' reservation date if specified
         if (reservation_date):
             self.reservation_date = reservation_date
         else:
             self.reservation_date = str(self.date_tomorrow)
+            print("Reservation date has been set to tomorrow (" + self.reservation_date + ")")
 
         # AutoTenez sanity checks
         if (not self.email_address) or (not self.password):
