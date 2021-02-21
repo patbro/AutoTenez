@@ -33,7 +33,7 @@ class AutoTenez:
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
-    reservation_date = None # Sate to make the reservation. Can be set from the command line
+    reservation_date = None # Date to make the reservation. Can be set from the command line
 
     ### Internal AutoTenez variables ###
     date_tomorrow = date.today() + timedelta(days=1)
