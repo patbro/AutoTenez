@@ -280,7 +280,7 @@ if __name__ == "__main__":
         parser.add_argument(       '--dryrun',               default=False, help="Pass as an argument to only check available time slots, but don't make a reservation.")
 
         required_arguments = parser.add_argument_group('Required arguments')
-        required_arguments.add_argument('-t', '--time',    nargs='+', help="Time you would to you reserve. One or two consecutive times are allowed (hh:mm).", required=True)
+        required_arguments.add_argument('-t', '--time',    nargs='+', help="Time you would to you reserve. One or two consecutive time slots separated by a space are allowed (hh:mm).", required=True)
         required_arguments.add_argument('-f', '--friends', nargs='+', help="External reference of whom you would like to play with. Minimum of 1 player required, maximum of 3 players allowed.", required=True)
 
         args = parser.parse_args()
