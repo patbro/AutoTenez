@@ -33,8 +33,6 @@ class AutoTenez:
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
-    reservation_date = None # Date to make the reservation. Can be set from the command line
-
     ### Internal AutoTenez variables ###
     date_tomorrow = date.today() + timedelta(days=1)
     headers = {
@@ -118,19 +116,39 @@ class AutoTenez:
             print("Retrieving necessary IDs...")
             # Retrieve membership ID, which is included in the bearer token, so we can make another call to retrieve your external reference
             decoded = jwt.decode(self.bearer_token, options={"verify_signature": False})
-            # Loop through all roles. Which is usually just one role
+            # Bearer token example
+            # {
+            #    "sub": "Socie",
+            #    "exp": 1613909087,
+            #    "iat": 1613905487,
+            #    "iss": "Socie",
+            #    "aud": "Socie",
+            #    "user_id": "<userId>",        # Alpha numeric string
+            #    "roles": {
+            #        "<communityId>": {        # Alpha numeric string
+            #        "<externalReference>": [  # Alpha numeric string
+            #            "user"
+            #        ]
+            #        }
+            #    },
+            #    "email": "<yourEmailAddress>",
+            #    "platform": "iOS",
+            #    "appType": "TENNIS"
+            # }
+
+            # Loop through all roles (=community ID). Which is usually just one role
             for role in decoded['roles']:
-                role_hash = role
+                self.community_id = role
+                break # Break, in case user is member of multiple communities (this is not yet supported)
             
             # When we found the role hash, we can loop through the next list, of which the key is the user ID
-            for membership_hash in decoded['roles'][role_hash]:
+            for membership_hash in decoded['roles'][self.community_id]:
                 self.membership_id = membership_hash
 
             # Add membership ID to all future requests
             self.headers['membership_id'] = self.membership_id
-
-            # Community ID is hardcoded because it is always the same for this case
-            r = requests.get("https://api.socie.nl/v2/me/communities/5a250a75d186db12a00f1def/memberships/" + self.membership_id, headers=self.headers, cookies=self.cookies)
+            
+            r = requests.get("https://api.socie.nl/v2/me/communities/" + self.community_id + "/memberships/" + self.membership_id, headers=self.headers, cookies=self.cookies)
             response = r.json()
             # Then, your external reference ID will be burried in the response.
             self.your_external_reference = response['extraFields']['externalReference']
@@ -139,18 +157,34 @@ class AutoTenez:
                 sys.exit(0)
 
             print(" - Your membership ID is: " + self.membership_id)
+            print(" - Your community ID is: " + self.community_id)
             
         # Catch JSONDecodeError
         except ValueError as e:
             raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to retrieve the necessary IDs")
     
+    def retrieve_member_external_reference(self, query):
+        if (len(query) < 3):
+            raise AutoTenezException("The search query shall be 3 characters or more")
+
+        r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/5a250a75d186db12a00f1dfd/members/search?q=" + query, headers=self.headers, cookies=self.cookies)
+        response = r.json()
+
+        if (len(response) > 0):
+            print("Found " + str(len(response)) + " member(s) using the query: " + query)
+            for member in response:
+                print(" - Name: " + member['appendedMembership']['fullName'])
+                print(" - External reference: " + member['appendedMembership']['externalReference'])
+                print()
+        else:
+            print("No members found using the query: " + query)
+
     def retrieve_slots(self):
         try:
             # Retrieve slots for tomorrow
             print("Retrieving time slots for tomorrow...")
             time.sleep(1) # Lets not stress the server too much
-
-            r = requests.get("https://api.socie.nl/v2/app/communities/5a250a75d186db12a00f1def/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" \
+            r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" \
                     + str(self.date_tomorrow) + "&externalReferences=" + self.membership_id + "," + self.other_players_external_references, headers=self.headers, cookies=self.cookies)
             response = r.json()
 
@@ -257,9 +291,7 @@ class AutoTenez:
 
     def make_reservation(self, md5slotkey):
         time.sleep(1) # Lets not stress the server too much
-
-        # Also here the community ID is hardcoded
-        r = requests.get("https://api.socie.nl/communities/5a250a75d186db12a00f1def/tennis_court_reservation_create?date=" \
+        r = requests.get("https://api.socie.nl/communities/" + self.community_id + "/tennis_court_reservation_create?date=" \
             + str(self.reservation_date) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + self.your_external_reference + "," + self.other_players_external_references, \
             headers=self.headers, cookies=self.cookies)
         
@@ -275,9 +307,10 @@ if __name__ == "__main__":
         # Parse input arguments
         parser = argparse.ArgumentParser(description='Reserve tennis court for tomorrow.')
         parser.add_argument('-c',  '--courts',               nargs='+',     help='Specify courts ("Baan X", where X is the court number). Default setting is all courts.')
-        parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd). Defaults to `reservation_date`.')
+        parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd). Defaults to tomorrow.')
         parser.add_argument('-t2', '--time_second_choice',   nargs='+',     help='Time you would like to reserve as a second option. One or two consecutive time slots separated by a space are allowed (hh:mm).')
         parser.add_argument('-c2', '--courts_second_choice', nargs='+',     help='Specify courts as second option ("Baan X", where X is the court number). Default setting is all courts.')
+        parser.add_argument('-q',  '--query',                               help='Query used when looking up the external reference of a member by name.')
         parser.add_argument(       '--dryrun',               default=False, help="Pass as an argument to only check available time slots, but don't make a reservation.")
 
         required_arguments = parser.add_argument_group('Required arguments')
@@ -325,6 +358,13 @@ if __name__ == "__main__":
 
         # Init AutoTenez class
         auto_tenez = AutoTenez(reservation_date, player2_external_reference, player3_external_reference, player4_external_reference)
+
+        # If specified the query argument is given, only perform the query action
+        # TODO: move to a separate file and inherit other functions from the AutoTenez class
+        if (args.query):
+            print("Query external reference of a member by name...")
+            auto_tenez.retrieve_member_external_reference(args.query)
+            sys.exit(0)
 
         # Retrieve all time slots
         slots = auto_tenez.retrieve_slots()
