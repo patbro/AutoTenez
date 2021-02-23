@@ -224,6 +224,7 @@ class AutoTenez:
             return 0, False, False
 
         # Loop through all available slots to find a match
+        previous_available_slot_court_name = None
         for slot in slots:
             court_name = slot[0]
             time_slot = slot[1][11:16]
@@ -233,7 +234,9 @@ class AutoTenez:
             time_slot = format(datetime.strptime(time_slot, '%H:%M') + timedelta(hours=+1), '%H:%M')
 
             # If we already found the first hour, check if this time slot also matches the second hour
-            if (previous_slot_available_and_matches == True) and (second_hour == time_slot):
+            # Verify the previous available and matched time slot is the same court
+            if (previous_slot_available_and_matches == True) and (second_hour == time_slot) \
+                and (previous_available_slot_court_name == court_name):
                 # Yay! A court is available! Check if desired court matches
                 if (self._check_court(courts, court_name) == True):
                     print(" - For the chosen time slot the first hour " + first_hour + " and second hour " + second_hour + " are available on " + court_name + " (" + md5slotkey + ")")
@@ -258,6 +261,7 @@ class AutoTenez:
                     else:
                         # Yes, they did. So continue searching...
                         previous_slot_available_and_matches = True
+                        previous_available_slot_court_name = court_name
                         print(" - At least time slot " + first_hour + " is available on " + court_name + " (" + md5slotkey + ")")
 
         if (second_time_slot_found != False):
