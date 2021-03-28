@@ -231,7 +231,7 @@ class AutoTenez:
             md5slotkey = slot[2]
 
             # Compensate for difference between local time and server time
-            time_slot = format(datetime.strptime(time_slot, '%H:%M') + timedelta(hours=+1), '%H:%M')
+            time_slot = format(datetime.strptime(time_slot, '%H:%M') + timedelta(hours=+2), '%H:%M')
 
             # If we already found the first hour, check if this time slot also matches the second hour
             # Verify the previous available and matched time slot is the same court
