@@ -30,6 +30,7 @@ class AutoTenez:
     email_address = "" # Your email address
     password = "" # Your password in plain-text
 
+    no_courts = 14 # The number of courts your club has
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
 
@@ -189,8 +190,8 @@ class AutoTenez:
             response = r.json()
 
             slots = []
-            # Loop through all courts: 0 up to and until 12 in our case
-            for court_no in range(0, 13):
+            # Loop through all courts: 0 up to and until 13 in our case (thus 14 in total)
+            for court_no in range(0, self.no_courts):
                 slots_per_court = response['locations'][court_no]['slots']
                 # Every time slot has slots
                 for slot in slots_per_court:
@@ -202,7 +203,7 @@ class AutoTenez:
                         slot.append(key['beginDate'])
                         slot.append(key['md5slotkey'])
                         slots.append(slot)
-            
+           
             return slots
 
         # Catch JSONDecodeError
