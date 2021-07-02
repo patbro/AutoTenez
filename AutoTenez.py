@@ -231,8 +231,13 @@ class AutoTenez:
             time_slot = slot[1][11:16]
             md5slotkey = slot[2]
 
-            # Compensate for difference between local time and server time
-            time_slot = format(datetime.strptime(time_slot, '%H:%M') + timedelta(hours=+2), '%H:%M')
+            # Compensate for difference between local time (has DST) and server time (UTC, has no DST)
+            if (time.localtime().tm_isdst == True):
+                # Summer time!
+                time_slot = format(datetime.strptime(time_slot, '%H:%M') + timedelta(hours=+2), '%H:%M')
+            else:
+                # Snowman o'clock
+                time_slot = format(datetime.strptime(time_slot, '%H:%M') + timedelta(hours=+1), '%H:%M')
 
             # If we already found the first hour, check if this time slot also matches the second hour
             # Verify the previous available and matched time slot is the same court
