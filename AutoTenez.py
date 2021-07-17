@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import datetime
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from datetime import timedelta
 import time
 import os
@@ -91,6 +91,16 @@ class AutoTenez:
 
         except ValueError as e:
             raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to retrieve the cookies")
+
+    def refresh_tokens(self):
+        decoded = jwt.decode(self.bearer_token, options={"verify_signature": False})
+        expiration_epoch = decoded['exp'] - 300 # Make sure the token does not expire soon
+        
+        if (datetime.now(timezone.utc) > datetime.fromtimestamp(expiration_epoch, timezone.utc)):
+            print("Login token expires soon. Refreshing token now...")
+            self.login()
+        else:
+            print("Login token is still valid")
 
     def login(self):
         try:
@@ -309,7 +319,7 @@ class AutoTenez:
         if (r.status_code == 204) and (len(r.content) == 0):
             print("Successfully made the reservation! With md5slotkey " + md5slotkey)
         else:
-            raise AutoTenezException("Failed to make the reservation with md5slotkey " + md5slotkey + ". Server returned status code: " + str(r.status_code))
+            raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to make the reservation with md5slotkey " + md5slotkey)
 
 # If ran from command line
 if __name__ == "__main__":
@@ -367,7 +377,20 @@ if __name__ == "__main__":
         dryrun = args.dryrun
 
         # Init AutoTenez class
-        auto_tenez = AutoTenez(reservation_date, player2_external_reference, player3_external_reference, player4_external_reference)
+        iteration = 1
+        while (1):
+            try:
+                auto_tenez = AutoTenez(reservation_date, player2_external_reference, player3_external_reference, player4_external_reference)
+                break # No exception was thrown, assuming init was successful
+            except AutoTenezException:
+                # If the server is unreachable an exception will be thrown
+                iteration = iteration + 1
+                print("Failed to initialize AutoTenez...retrying in 30 seconds (iteration " + str(iteration) + ")")
+                if (iteration > 240):
+                    print("Retried 240 times already. Exiting script now")
+                    sys.exit(-1)
+                
+                time.sleep(30)
 
         # If specified the query argument is given, only perform the query action
         # TODO: move to a separate file and inherit other functions from the AutoTenez class
@@ -376,53 +399,73 @@ if __name__ == "__main__":
             auto_tenez.retrieve_member_external_reference(args.query)
             sys.exit(0)
 
-        # Retrieve all time slots
-        slots = auto_tenez.retrieve_slots()
-
-        # Find available time slots
-        print("Finding available time slots for your first choice...")
-        first_choice_no_slots, first_choice_first_slotkey, first_choice_second_slotkey = \
-            auto_tenez.find_time_slot(slots, first_choice_first_hour, first_choice_second_hour, first_choice_courts)
+        iteration = 1
+        while (1):
+            try:
+                # Retrieve all time slots
+                slots = auto_tenez.retrieve_slots()
         
-        print("Finding available time slots for your second choice...")
-        second_choice_no_slots, second_choice_first_slotkey, second_choice_second_slotkey = \
-            auto_tenez.find_time_slot(slots, second_choice_first_hour, second_choice_second_hour, second_choice_courts)
-
-        first_md5slotkey = None
-        second_md5slotkey = None
-
-        # Reserve the biggest time slot
-        if(second_choice_no_slots > first_choice_no_slots):
-            print("Propagating second choice. Number of time slots: " + str(second_choice_no_slots))
-            if (second_choice_first_slotkey):
-                print(" - First time slot md5slotkey " + second_choice_first_slotkey)
-                first_md5slotkey = second_choice_first_slotkey
-            if (second_choice_second_slotkey):
-                print(" - Second time slot md5slotkey " + second_choice_second_slotkey)
-                second_md5slotkey = second_choice_second_slotkey
-        elif(first_choice_first_slotkey != False):
-            print("Propagating first choice. Number of time slots: " + str(first_choice_no_slots))
-            if (first_choice_first_slotkey):
-                print(" - First time slot md5slotkey " + first_choice_first_slotkey)
-                first_md5slotkey = first_choice_first_slotkey
-            if (first_choice_second_slotkey):
-                print(" - Second time slot md5slotkey " + first_choice_second_slotkey)
-                second_md5slotkey = first_choice_second_slotkey
-        else:
-            print("There are no time slots available")
-
-        if (dryrun) and (first_md5slotkey or second_md5slotkey):
-            print("Not making a reservation because dryrun is set to True")
-            first_md5slotkey = None
-            second_md5slotkey = None
+                # Find available time slots
+                print("Finding available time slots for your first choice...")
+                first_choice_no_slots, first_choice_first_slotkey, first_choice_second_slotkey = \
+                    auto_tenez.find_time_slot(slots, first_choice_first_hour, first_choice_second_hour, first_choice_courts)
+                
+                print("Finding available time slots for your second choice...")
+                second_choice_no_slots, second_choice_first_slotkey, second_choice_second_slotkey = \
+                    auto_tenez.find_time_slot(slots, second_choice_first_hour, second_choice_second_hour, second_choice_courts)
         
-        if (first_md5slotkey):
-            print("Make the reservation for the first time slot...")
-            auto_tenez.make_reservation(first_md5slotkey)
+                first_md5slotkey = None
+                second_md5slotkey = None
+        
+                # Reserve the biggest time slot
+                if(second_choice_no_slots > first_choice_no_slots):
+                    print("Propagating second choice. Number of time slots: " + str(second_choice_no_slots))
+                    if (second_choice_first_slotkey):
+                        print(" - First time slot md5slotkey " + second_choice_first_slotkey)
+                        first_md5slotkey = second_choice_first_slotkey
+                    if (second_choice_second_slotkey):
+                        print(" - Second time slot md5slotkey " + second_choice_second_slotkey)
+                        second_md5slotkey = second_choice_second_slotkey
+                elif(first_choice_first_slotkey != False):
+                    print("Propagating first choice. Number of time slots: " + str(first_choice_no_slots))
+                    if (first_choice_first_slotkey):
+                        print(" - First time slot md5slotkey " + first_choice_first_slotkey)
+                        first_md5slotkey = first_choice_first_slotkey
+                    if (first_choice_second_slotkey):
+                        print(" - Second time slot md5slotkey " + first_choice_second_slotkey)
+                        second_md5slotkey = first_choice_second_slotkey
+                else:
+                    print("There are no time slots available")
+        
+                if (dryrun) and (first_md5slotkey or second_md5slotkey):
+                    print("Not making a reservation because dryrun is set to True")
+                    first_md5slotkey = None
+                    second_md5slotkey = None
+                
+                if (first_md5slotkey):
+                    print("Make the reservation for the first time slot...")
+                    auto_tenez.make_reservation(first_md5slotkey)
+        
+                if (second_md5slotkey):
+                    print("Make the reservation for the second time slot...")
+                    auto_tenez.make_reservation(second_md5slotkey)
 
-        if (second_md5slotkey):
-            print("Make the reservation for the second time slot...")
-            auto_tenez.make_reservation(second_md5slotkey)
+                break # No exception was thrown, assuming reservation was successful
+
+            except AutoTenezException:
+                # If the server is unreachable an exception will be thrown
+                iteration = iteration + 1
+                print("Failed to make a reservation...retrying in 60 seconds (iteration " + str(iteration) + ")")
+                if (iteration > 600):
+                    print("Retried 600 times already. Exiting script now")
+                    sys.exit(-1)
+
+                time.sleep(60)
+                try:
+                    auto_tenez.refresh_tokens()
+                except Exception as e:
+                    print("An error occurred while refreshing the tokens:")
+                    print(e)
 
     except KeyboardInterrupt:
         print("\r\nKeyboard interrupt")
