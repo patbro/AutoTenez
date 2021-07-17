@@ -382,7 +382,7 @@ if __name__ == "__main__":
             try:
                 auto_tenez = AutoTenez(reservation_date, player2_external_reference, player3_external_reference, player4_external_reference)
                 break # No exception was thrown, assuming init was successful
-            except AutoTenezException:
+            except ParsingResponseFailed:
                 # If the server is unreachable an exception will be thrown
                 iteration = iteration + 1
                 print("Failed to initialize AutoTenez...retrying in 30 seconds (iteration " + str(iteration) + ")")
@@ -452,7 +452,7 @@ if __name__ == "__main__":
 
                 break # No exception was thrown, assuming reservation was successful
 
-            except AutoTenezException:
+            except ParsingResponseFailed:
                 # If the server is unreachable an exception will be thrown
                 iteration = iteration + 1
                 print("Failed to make a reservation...retrying in 60 seconds (iteration " + str(iteration) + ")")
