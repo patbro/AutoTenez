@@ -30,6 +30,7 @@ class AutoTenez:
     email_address = "" # Your email address
     password = "" # Your password in plain-text
 
+    possible_to_reserve = [0, 48] # Defines when it is possible to make a reservation, syntax: [<days>, <hours>]. E.g.: [0, 48] means 48 hours upfront. [1, 0] means 1 day upfront (so tomorrow).
     no_courts = 14 # The number of courts your club has
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
@@ -51,7 +52,7 @@ class AutoTenez:
         "Content-Type": "application/json",
     }
 
-    def __init__(self, reservation_date, player2_external_reference, player3_external_reference, player4_external_reference):
+    def __init__(self, reservation_date, hour, player2_external_reference, player3_external_reference, player4_external_reference):
         print("Initializing AutoTenez at " + str(datetime.now()))
         # Set class' reservation date if specified
         if (reservation_date):
@@ -66,10 +67,24 @@ class AutoTenez:
         
         if (self.only_retrieve_your_external_reference == False) and (not player2_external_reference):
             raise AutoTenezException("Fill out the external reference of at least one other player")
+        
+        if (not hour):
+            raise AutoTenezException("First hour of first choice has not been set")
 
-        # Raise exception if tomorrow is not the chosen date yet, so wait to make the reservation
-        if (self.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
-            raise AutoTenezException("Chosen reservation date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
+        # Check if we already can make a reservation based on the restrictions set by the club
+        if (self.possible_to_reserve[0] == 1 and self.possible_reserve[1] == 0):
+            # Raise exception if tomorrow is not the chosen date yet, so wait to make the reservation
+            if (self.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
+                raise AutoTenezException("Chosen reservation date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
+        
+        elif (self.possible_to_reserve[0] == 0 and self.possible_to_reserve[1] == 48):
+            possible_reservation_datetime = datetime.now() + timedelta(hours=self.possible_to_reserve[1])
+            # Raise exception if the chosen date and first hour is not within the given time delta as specified by the user
+            if (datetime.strptime(self.reservation_date + " " + hour, "%Y-%m-%d %H:%M") > possible_reservation_datetime):
+                raise AutoTenezException("Chosen date and first hour is not yet within " + str(self.possible_to_reserve[1]) + " hours")
+
+        else:
+            raise AutoTenezException("Sorry! Not yet supported")
 
         # Prepare other player's external references to send with some of the requests
         self.other_players_external_references = player2_external_reference
@@ -380,17 +395,17 @@ if __name__ == "__main__":
         iteration = 1
         while (1):
             try:
-                auto_tenez = AutoTenez(reservation_date, player2_external_reference, player3_external_reference, player4_external_reference)
+                auto_tenez = AutoTenez(reservation_date, first_choice_first_hour, player2_external_reference, player3_external_reference, player4_external_reference)
                 break # No exception was thrown, assuming init was successful
             except ParsingResponseFailed:
                 # If the server is unreachable an exception will be thrown
                 iteration = iteration + 1
-                print("Failed to initialize AutoTenez...retrying in 30 seconds (iteration " + str(iteration) + ")")
+                print("Failed to initialize AutoTenez...retrying in 60 seconds (iteration " + str(iteration) + ")")
                 if (iteration > 240):
                     print("Retried 240 times already. Exiting script now")
                     sys.exit(-1)
                 
-                time.sleep(30)
+                time.sleep(60)
 
         # If specified the query argument is given, only perform the query action
         # TODO: move to a separate file and inherit other functions from the AutoTenez class
