@@ -72,16 +72,16 @@ class AutoTenez:
             raise AutoTenezException("First hour of first choice has not been set")
 
         # Check if we already can make a reservation based on the restrictions set by the club
-        if (possible_to_reserve[0] == 1 and possible_reserve[1] == 0):
+        if (self.possible_to_reserve[0] == 1 and self.possible_reserve[1] == 0):
             # Raise exception if tomorrow is not the chosen date yet, so wait to make the reservation
             if (self.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
                 raise AutoTenezException("Chosen reservation date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
         
-        elif (possible_to_reserve[0] == 0 and possible_to_reserve[1] == 48):
-            possible_reversation_datetime = datetime.now() + timedelta(hours=possible_to_reserve[1])
-            # Raise exception if the current datetime is not within the given time delta as specified by the user
-            if (datetime.now() < possible_reservation_datetime):
-                raise AutoTenezException("Chosen date and first hour is not yet within " + str(possible_to_reserve[1]) + " hours")
+        elif (self.possible_to_reserve[0] == 0 and self.possible_to_reserve[1] == 48):
+            possible_reservation_datetime = datetime.now() + timedelta(hours=self.possible_to_reserve[1])
+            # Raise exception if the chosen date and first hour is not within the given time delta as specified by the user
+            if (datetime.strptime(self.reservation_date + " " + hour, "%Y-%m-%d %H:%M") > possible_reservation_datetime):
+                raise AutoTenezException("Chosen date and first hour is not yet within " + str(self.possible_to_reserve[1]) + " hours")
 
         else:
             raise AutoTenezException("Sorry! Not yet supported")

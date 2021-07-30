@@ -22,3 +22,4 @@ Automates the process of making tennis court reservations for you.
 * Does not account for how many number of players the court is available to make a reservation.
 * Passing `--dryrun` as an argument needs a value assigned in order to properly work (e.g. `--dryrun 1`).
 * Move setup and query functionality to a separate file.
+* Not reserving a possible time slot when second choice is set before first choice, though second choice is within 48 hours.
