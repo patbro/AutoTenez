@@ -208,10 +208,10 @@ class AutoTenez:
     def retrieve_slots(self):
         try:
             # Retrieve slots for tomorrow
-            print("Retrieving time slots for tomorrow...")
+            print("Retrieving time slots for " + self.reservation_date)
             time.sleep(1) # Lets not stress the server too much
             r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" \
-                    + str(self.date_tomorrow) + "&externalReferences=" + self.membership_id + "," + self.other_players_external_references, headers=self.headers, cookies=self.cookies)
+                    + str(self.reservation_date) + "&externalReferences=" + self.membership_id + "," + self.other_players_external_references, headers=self.headers, cookies=self.cookies)
             response = r.json()
 
             slots = []
