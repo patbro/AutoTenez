@@ -27,13 +27,18 @@ class ParsingResponseFailed(AutoTenezException):
         return f"""{self.message} -> {self.exception} \r\nStatus code: {self.status_code} \r\nHeaders: {self.headers} \r\nContent: {self.content}"""
 
 class AutoTenez:
+    global limt_debug_output
+    
+    # Your details
     email_address = "" # Your email address
     password = "" # Your password in plain-text
 
+    # AutoTenez settings
     possible_to_reserve = [0, 48] # Defines when it is possible to make a reservation, syntax: [<days>, <hours>]. E.g.: [0, 48] means 48 hours upfront. [1, 0] means 1 day upfront (so tomorrow).
     no_courts = 14 # The number of courts your club has
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
+    limit_debug_output = False # Drastically limit what AutoTenez prints to stdout
 
     ### Internal AutoTenez variables ###
     date_tomorrow = date.today() + timedelta(days=1)
@@ -53,10 +58,11 @@ class AutoTenez:
     }
 
     def __init__(self, reservation_date, hour, player2_external_reference, player3_external_reference, player4_external_reference):
-        print("Initializing AutoTenez at " + str(datetime.now()))
+        print("Initializing AutoTenez at", datetime.now())
         # Set class' reservation date if specified
         if (reservation_date):
             self.reservation_date = reservation_date
+            print("Reservation date has been set to", self.reservation_date)
         else:
             self.reservation_date = str(self.date_tomorrow)
             print("Reservation date has been set to tomorrow (" + self.reservation_date + ")")
@@ -119,7 +125,9 @@ class AutoTenez:
 
     def login(self):
         try:
-            print("Logging in as " + self.email_address + "...")
+            if (self.limit_debug_output is False):
+                print("Logging in as " + self.email_address + "...")
+
             payload = {
                 "appType": "TENNIS",
                 "email": self.email_address,
@@ -139,7 +147,9 @@ class AutoTenez:
 
     def retrieve_necessary_ids(self):
         try:
-            print("Retrieving necessary IDs...")
+            if (self.limit_debug_output is False):
+                print("Retrieving necessary IDs...")
+
             # Retrieve membership ID, which is included in the bearer token, so we can make another call to retrieve your external reference
             decoded = jwt.decode(self.bearer_token, options={"verify_signature": False})
             # Bearer token example
@@ -178,13 +188,16 @@ class AutoTenez:
             response = r.json()
             # Then, your external reference ID will be burried in the response.
             self.your_external_reference = response['extraFields']['externalReference']
-            print(" - Your external reference is: " + response['extraFields']['externalReference'])
+            if (self.limit_debug_output is False):
+                print(" - Your external reference is: " + response['extraFields']['externalReference'])
+
             if (self.only_retrieve_your_external_reference == True):
                 sys.exit(0)
 
-            print(" - Your membership ID is: " + self.membership_id)
-            print(" - Your community ID is: " + self.community_id)
-            
+            if (self.limit_debug_output is False):
+                print(" - Your membership ID is: " + self.membership_id)
+                print(" - Your community ID is: " + self.community_id)
+
         # Catch JSONDecodeError
         except ValueError as e:
             raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to retrieve the necessary IDs")
@@ -208,7 +221,9 @@ class AutoTenez:
     def retrieve_slots(self):
         try:
             # Retrieve slots for tomorrow
-            print("Retrieving time slots for " + self.reservation_date)
+            if (self.limit_debug_output is False):
+                print("Retrieving time slots for " + self.reservation_date)
+
             time.sleep(1) # Lets not stress the server too much
             r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" \
                     + str(self.reservation_date) + "&externalReferences=" + self.membership_id + "," + self.other_players_external_references, headers=self.headers, cookies=self.cookies)
@@ -421,11 +436,13 @@ if __name__ == "__main__":
                 slots = auto_tenez.retrieve_slots()
         
                 # Find available time slots
-                print("Finding available time slots for your first choice...")
+                if (auto_tenez.limit_debug_output is False):
+                    print("Finding available time slots for your first choice...")
                 first_choice_no_slots, first_choice_first_slotkey, first_choice_second_slotkey = \
                     auto_tenez.find_time_slot(slots, first_choice_first_hour, first_choice_second_hour, first_choice_courts)
                 
-                print("Finding available time slots for your second choice...")
+                if (auto_tenez.limit_debug_output is False):
+                    print("Finding available time slots for your second choice...")
                 second_choice_no_slots, second_choice_first_slotkey, second_choice_second_slotkey = \
                     auto_tenez.find_time_slot(slots, second_choice_first_hour, second_choice_second_hour, second_choice_courts)
         
@@ -434,20 +451,26 @@ if __name__ == "__main__":
         
                 # Reserve the biggest time slot
                 if(second_choice_no_slots > first_choice_no_slots):
-                    print("Propagating second choice. Number of time slots: " + str(second_choice_no_slots))
+                    if (auto_tenez.limit_debug_output is False):
+                        print("Propagating second choice. Number of time slots: " + str(second_choice_no_slots))
                     if (second_choice_first_slotkey):
-                        print(" - First time slot md5slotkey " + second_choice_first_slotkey)
+                        if (auto_tenez.limit_debug_output is False):
+                            print(" - First time slot md5slotkey " + second_choice_first_slotkey)
                         first_md5slotkey = second_choice_first_slotkey
                     if (second_choice_second_slotkey):
-                        print(" - Second time slot md5slotkey " + second_choice_second_slotkey)
+                        if (auto_tenez.limit_debug_output is False):
+                            print(" - Second time slot md5slotkey " + second_choice_second_slotkey)
                         second_md5slotkey = second_choice_second_slotkey
                 elif(first_choice_first_slotkey != False):
-                    print("Propagating first choice. Number of time slots: " + str(first_choice_no_slots))
+                    if (auto_tenez.limit_debug_output is False):
+                        print("Propagating first choice. Number of time slots: " + str(first_choice_no_slots))
                     if (first_choice_first_slotkey):
-                        print(" - First time slot md5slotkey " + first_choice_first_slotkey)
+                        if (auto_tenez.limit_debug_output is False):
+                            print(" - First time slot md5slotkey " + first_choice_first_slotkey)
                         first_md5slotkey = first_choice_first_slotkey
                     if (first_choice_second_slotkey):
-                        print(" - Second time slot md5slotkey " + first_choice_second_slotkey)
+                        if (auto_tenez.limit_debug_output is False):
+                            print(" - Second time slot md5slotkey " + first_choice_second_slotkey)
                         second_md5slotkey = first_choice_second_slotkey
                 else:
                     print("There are no time slots available")
@@ -458,11 +481,13 @@ if __name__ == "__main__":
                     second_md5slotkey = None
                 
                 if (first_md5slotkey):
-                    print("Make the reservation for the first time slot...")
+                    if (auto_tenez.limit_debug_output is False):
+                        print("Make the reservation for the first time slot...")
                     auto_tenez.make_reservation(first_md5slotkey)
         
                 if (second_md5slotkey):
-                    print("Make the reservation for the second time slot...")
+                    if (auto_tenez.limit_debug_output is False):
+                        print("Make the reservation for the second time slot...")
                     auto_tenez.make_reservation(second_md5slotkey)
 
                 break # No exception was thrown, assuming reservation was successful
