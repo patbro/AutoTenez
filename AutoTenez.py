@@ -34,14 +34,18 @@ class AutoTenez:
     password = "" # Your password in plain-text
 
     # AutoTenez settings
-    possible_to_reserve = [0, 48] # Defines when it is possible to make a reservation, syntax: [<days>, <hours>]. E.g.: [0, 48] means 48 hours upfront. [1, 0] means 1 day upfront (so tomorrow).
+    possible_to_reserve = [0, 48] # Reservation limits. Define when it is possible to make a reservation, syntax: [<days>, <hours>]. E.g.: [0, 48] means 48 hours upfront. [1, 0] means 1 day upfront (so tomorrow).
     no_courts = 14 # The number of courts your club has
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
     limit_debug_output = False # Drastically limit what AutoTenez prints to stdout
 
     ### Internal AutoTenez variables ###
-    date_tomorrow = date.today() + timedelta(days=1)
+    if (possible_to_reserve[0] != 0):
+        date_to_reserve = date.today() + timedelta(days=possible_to_reserve[0])
+    else:
+        date_to_reserve = (datetime.now() + timedelta(hours=possible_to_reserve[1])).strftime("%Y-%m-%d")
+
     headers = {
         "Host": "api.socie.nl",
         "AppBundle": "nl.tizin.socie.tennis",
@@ -64,8 +68,8 @@ class AutoTenez:
             self.reservation_date = reservation_date
             print("Reservation date has been set to", self.reservation_date)
         else:
-            self.reservation_date = str(self.date_tomorrow)
-            print("Reservation date has been set to tomorrow (" + self.reservation_date + ")")
+            self.reservation_date = str(self.date_to_reserve)
+            print("Reservation date has been set to latest reservation date possible (" + self.reservation_date + ")")
 
         # AutoTenez sanity checks
         if (not self.email_address) or (not self.password):
@@ -77,20 +81,22 @@ class AutoTenez:
         if (not hour):
             raise AutoTenezException("First hour of first choice has not been set")
 
-        # Check if we already can make a reservation based on the restrictions set by the club
-        if (self.possible_to_reserve[0] == 1 and self.possible_reserve[1] == 0):
-            # Raise exception if tomorrow is not the chosen date yet, so wait to make the reservation
-            if (self.only_retrieve_your_external_reference == False) and (str(self.date_tomorrow) != self.reservation_date):
-                raise AutoTenezException("Chosen reservation date (" + self.reservation_date + ") is not yet tomorrow ("+ str(self.date_tomorrow) +").")
-        
-        elif (self.possible_to_reserve[0] == 0 and self.possible_to_reserve[1] == 48):
-            possible_reservation_datetime = datetime.now() + timedelta(hours=self.possible_to_reserve[1])
-            # Raise exception if the chosen date and first hour is not within the given time delta as specified by the user
-            if (datetime.strptime(self.reservation_date + " " + hour, "%Y-%m-%d %H:%M") > possible_reservation_datetime):
-                raise AutoTenezException("Chosen date and first hour is not yet within " + str(self.possible_to_reserve[1]) + " hours")
+        if (self.only_retrieve_your_external_reference == False):
+            # Check if we already can make a reservation based on the restrictions set by the club
+            if (self.possible_to_reserve[0] != 0 and self.possible_reserve[1] == 0):
+                possible_reservation_date = date.today() + timedelta(days=self.possible_to_reserve[1])
+                # Raise exception if the possible reservation date did not reach the chosen reservation date by the user
+                if (possible_reservation_date < self.reservation_date):
+                    raise AutoTenezException("Ultimately possible reservation date", possible_reservation_date, "did not yet reach reservation date", self.reservation_date)
 
-        else:
-            raise AutoTenezException("Sorry! Not yet supported")
+            elif (self.possible_to_reserve[0] == 0 and self.possible_to_reserve[1] != 0):
+                possible_reservation_datetime = datetime.now() + timedelta(hours=self.possible_to_reserve[1])
+                # Raise exception if the chosen date and first hour is not within the given time delta as specified by the user
+                if (datetime.strptime(self.reservation_date + " " + hour, "%Y-%m-%d %H:%M") > possible_reservation_datetime):
+                    raise AutoTenezException("Chosen date and first hour is not yet within " + str(self.possible_to_reserve[1]) + " hours")
+                
+            else:
+                raise AutoTenezException("Sorry! Not yet supported")
 
         # Prepare other player's external references to send with some of the requests
         self.other_players_external_references = player2_external_reference
@@ -357,7 +363,7 @@ if __name__ == "__main__":
         # Parse input arguments
         parser = argparse.ArgumentParser(description='Reserve tennis court for tomorrow.')
         parser.add_argument('-c',  '--courts',               nargs='+',     help='Specify courts ("Baan X", where X is the court number). Default setting is all courts.')
-        parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd). Defaults to tomorrow.')
+        parser.add_argument('-d',  '--date',                                help='Specify the date to make the reservation (yyyy-mm-dd). Defaults to the greatest reservation limit set in the AutoTenez settings.')
         parser.add_argument('-t2', '--time_second_choice',   nargs='+',     help='Time you would like to reserve as a second option. One or two consecutive time slots separated by a space are allowed (hh:mm).')
         parser.add_argument('-c2', '--courts_second_choice', nargs='+',     help='Specify courts as second option ("Baan X", where X is the court number). Default setting is all courts.')
         parser.add_argument('-q',  '--query',                               help='Query used when looking up the external reference of a member by name.')
