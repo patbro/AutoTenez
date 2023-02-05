@@ -35,7 +35,7 @@ class AutoTenez:
 
     # AutoTenez settings
     possible_to_reserve = [0, 48] # Reservation limits. Define when it is possible to make a reservation, syntax: [<days>, <hours>]. E.g.: [0, 48] means 48 hours upfront. [1, 0] means 1 day upfront (so tomorrow).
-    no_courts = 14 # The number of courts your club has
+    no_courts = 21 # The number of courts your club has
     only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
     dryrun = False # Only check available time slots, but don't make a reservation. False by default
     limit_debug_output = False # Drastically limit what AutoTenez prints to stdout
@@ -231,12 +231,13 @@ class AutoTenez:
                 print("Retrieving time slots for " + self.reservation_date)
 
             time.sleep(1) # Lets not stress the server too much
-            r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/5eb4720c8618e00287a3eff6/allunited_tennis_courts/slots?date=" \
+            r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/61cb14184779bc6fcade0980/allunited_tennis_courts/slots?date=" \
                     + str(self.reservation_date) + "&externalReferences=" + self.membership_id + "," + self.other_players_external_references, headers=self.headers, cookies=self.cookies)
             response = r.json()
 
             slots = []
-            # Loop through all courts: 0 up to and until 13 in our case (thus 14 in total)
+            # Loop through all courts
+            # Only loop through the tennis courts. These are the first 'no_courts' in the list in the response. Others are padel courts, but these are disregarded.
             for court_no in range(0, self.no_courts):
                 slots_per_court = response['locations'][court_no]['slots']
                 # Every time slot has slots
