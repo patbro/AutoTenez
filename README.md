@@ -3,7 +3,7 @@ Automates the process of making tennis court reservations for you.
 
 ## Setup
 1. Install all necessary pip dependencies using `python -m pip install -r requirements.txt`.
-1. Open `AutoTenez.py`. Enter your email address, password, and set `only_retrieve_personal_information` to `True`.
+1. Open `AutoTenez.py`. Enter your email address, password in the designated variables, or create `credentials.txt` where the first line should contain your email address and the second line your password. Finally, set `only_retrieve_personal_information` to `True` in `AutoTenez.py`.
 1. Run `python AutoTenez.py -t 00:00 -f 0` to retrieve your own external reference.
 1. Share your external reference with a friend, and set `only_retrieve_personal_information` to `False`.
 1. Set the reservation limits of your club in `possible_to_reserve` (defaults to 48 hours upfront), and define the number of courts for your club in `no_courts` (defaults to 14 courts).

@@ -32,6 +32,11 @@ class AutoTenez:
     # Your details
     email_address = "" # Your email address
     password = "" # Your password in plain-text
+    if email_address == "" or password == "":
+        with open('credentials.txt') as f:
+            lines = f.readlines()
+            email_address = lines[0].strip()
+            password = lines[1].strip()
 
     # AutoTenez settings
     possible_to_reserve = [0, 48] # Reservation limits. Define when it is possible to make a reservation, syntax: [<days>, <hours>]. E.g.: [0, 48] means 48 hours upfront. [1, 0] means 1 day upfront (so tomorrow).
@@ -143,6 +148,10 @@ class AutoTenez:
 
             r = requests.post("https://api.socie.nl/login/socie", json=payload, headers=self.headers, cookies=self.cookies)
             response = r.json()
+            if (r.status_code != 200):
+                print(response)
+                sys.exit(-1)
+
             # Obtain bearer token from the JSON reponse (later used in `retrieve_necessary_ids`)
             self.bearer_token = response['access_token']
             # Add bearer token to all future requests
