@@ -36,9 +36,10 @@ class AutoTenez:
     # AutoTenez settings
     possible_to_reserve = [0, 48] # Reservation limits. Define when it is possible to make a reservation, syntax: [<days>, <hours>]. E.g.: [0, 48] means 48 hours upfront. [1, 0] means 1 day upfront (so tomorrow).
     no_courts = 21 # The number of courts your club has
-    only_retrieve_your_external_reference = False # Set to True to retrieve your external reference to share with a friend
-    dryrun = False # Only check available time slots, but don't make a reservation. False by default
+    only_retrieve_personal_information = False # Set to True to retrieve your personal information (including external reference) to share with a friend
+    dryrun = True # Only check available time slots, but don't make a reservation. False by default
     limit_debug_output = False # Drastically limit what AutoTenez prints to stdout
+    retrieve_module_information = False # Retrieve detailed information about modules
 
     ### Internal AutoTenez variables ###
     if (possible_to_reserve[0] != 0):
@@ -53,10 +54,10 @@ class AutoTenez:
         "appVersion": "3.11.0",
         "Accept-Language": "en-us",
         "Cache-Control": "no-cache",
-        "PLatform": "iOS",
+        "Platform": "iOS",
         "Accept-Encoding": "gzip, deflate",
         "Language": "en-NL",
-        "User-AGent": "ClubApp/237 CFNetwork/1209 Darwin/20.2.0",
+        "User-Agent": "ClubApp/307 CFNetwork/1399 Darwin/22.1.0",
         "Connection": "close",
         "Content-Type": "application/json",
     }
@@ -75,13 +76,13 @@ class AutoTenez:
         if (not self.email_address) or (not self.password):
             raise AutoTenezException("Make sure to enter your email address and password")
         
-        if (self.only_retrieve_your_external_reference == False) and (not player2_external_reference):
+        if (self.only_retrieve_personal_information == False) and (not player2_external_reference):
             raise AutoTenezException("Fill out the external reference of at least one other player")
         
         if (not hour):
             raise AutoTenezException("First hour of first choice has not been set")
 
-        if (self.only_retrieve_your_external_reference == False):
+        if (self.only_retrieve_personal_information == False):
             # Check if we already can make a reservation based on the restrictions set by the club
             if (self.possible_to_reserve[0] != 0 and self.possible_reserve[1] == 0):
                 possible_reservation_date = date.today() + timedelta(days=self.possible_to_reserve[1])
@@ -166,11 +167,12 @@ class AutoTenez:
             #    "iss": "Socie",
             #    "aud": "Socie",
             #    "user_id": "<userId>",        # Alpha numeric string
+            #    "isEmailVerified": true,
             #    "roles": {
             #        "<communityId>": {        # Alpha numeric string
-            #        "<externalReference>": [  # Alpha numeric string
-            #            "user"
-            #        ]
+            #           "<membershipId>": [      # Alpha numeric string
+            #               "user"
+            #           ]
             #        }
             #    },
             #    "email": "<yourEmailAddress>",
@@ -197,12 +199,19 @@ class AutoTenez:
             if (self.limit_debug_output is False):
                 print(" - Your external reference is: " + response['extraFields']['externalReference'])
 
-            if (self.only_retrieve_your_external_reference == True):
-                sys.exit(0)
-
             if (self.limit_debug_output is False):
                 print(" - Your membership ID is: " + self.membership_id)
                 print(" - Your community ID is: " + self.community_id)
+
+            # Retrieve all modules and their module ID's
+            if (self.retrieve_module_information is True):
+                r = requests.get("https://api.socie.nl/communities/" + self.community_id + "/modules", headers=self.headers, cookies=self.cookies)
+                response = r.json()
+                modules = response[0]['actionMenuOptions']
+                print(modules)
+
+            if (self.only_retrieve_personal_information == True):
+                sys.exit(0)
 
         # Catch JSONDecodeError
         except ValueError as e:
@@ -212,14 +221,14 @@ class AutoTenez:
         if (len(query) < 3):
             raise AutoTenezException("The search query shall be 3 characters or more")
 
-        r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/5a250a75d186db12a00f1dfd/members/search?q=" + query, headers=self.headers, cookies=self.cookies)
+        r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/61cb14184779bc6fcade0980/allunited_tennis_courts/search_players?q=" + query, headers=self.headers, cookies=self.cookies)
         response = r.json()
 
         if (len(response) > 0):
             print("Found " + str(len(response)) + " member(s) using the query: " + query)
             for member in response:
-                print(" - Name: " + member['appendedMembership']['fullName'])
-                print(" - External reference: " + member['appendedMembership']['externalReference'])
+                print(" - Name: " + member['fullName'])
+                print(" - External reference: " + member['externalReference'])
                 print()
         else:
             print("No members found using the query: " + query)
@@ -238,7 +247,7 @@ class AutoTenez:
             slots = []
             # Loop through all courts
             # Only loop through the tennis courts. These are the first 'no_courts' in the list in the response. Others are padel courts, but these are disregarded.
-            for court_no in range(0, self.no_courts):
+            for court_no in range(0, self.no_courts): # TODO(PATBRO): make it possible to only loop through tennis or padel courts
                 slots_per_court = response['locations'][court_no]['slots']
                 # Every time slot has slots
                 for slot in slots_per_court:
@@ -348,6 +357,25 @@ class AutoTenez:
 
     def make_reservation(self, md5slotkey):
         time.sleep(1) # Lets not stress the server too much
+
+        # TODO(PATBRO): implement new way of making tennis court reservations
+        #payload = {
+        #    "date": str(self.reservation_date),
+        #    "registeredPlayers":[
+        #        {
+        #            "externalReference": self.your_external_reference,
+        #            "guests": 0
+        #        },
+        #        {
+        #            "externalReference": self.other_players_external_references 
+        #        }
+        #    ],
+        #    "md5slotkey": md5slotkey
+        #}
+        #
+        #r = requests.post("https://api.socie.nl/v2/app/communities/61c45fbd20c43d78ef924307/modules/61cb14184779bc6fcade0980/allunited_tennis_courts/reservations", \
+        #        json=payload, headers=self.headers, cookies=self.cookies)
+
         r = requests.get("https://api.socie.nl/communities/" + self.community_id + "/tennis_court_reservation_create?date=" \
             + str(self.reservation_date) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + self.your_external_reference + "," + self.other_players_external_references, \
             headers=self.headers, cookies=self.cookies)
@@ -357,6 +385,25 @@ class AutoTenez:
             print("Successfully made the reservation! With md5slotkey " + md5slotkey)
         else:
             raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to make the reservation with md5slotkey " + md5slotkey)
+
+    def delete_reservation(self):
+        # Retrieve all reservations 
+        r = requests.get("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/61cb14184779bc6fcade0980/allunited_tennis_courts/my_reservations", \
+            headers=self.headers, cookies=self.cookies)
+        response = r.json()
+        print(response)
+    
+        print("Please look up your reservation ID in the response above")
+        reservationId = input("Enter your reservation ID: ")
+    
+        r = requests.get("https://api.socie.nl/communities/" + self.community_id + "/tennis_court_reservation_delete?reservationId=" + reservationId + "&externalReferences=" + self.your_external_reference, \
+            headers=self.headers, cookies=self.cookies)
+    
+        # We expect a status code 204 No Content, with of course no content
+        if (r.status_code == 204) and (len(r.content) == 0):
+            print("Successfully deleted the reservation")
+        else:
+            print("Failed to delete the reservation")
 
 # If ran from command line
 if __name__ == "__main__":
@@ -369,6 +416,7 @@ if __name__ == "__main__":
         parser.add_argument('-c2', '--courts_second_choice', nargs='+',     help='Specify courts as second option ("Baan X", where X is the court number). Default setting is all courts.')
         parser.add_argument('-q',  '--query',                               help='Query used when looking up the external reference of a member by name.')
         parser.add_argument(       '--dryrun',               default=False, help="Pass as an argument to only check available time slots, but don't make a reservation.")
+        parser.add_argument(       '--delete',               default=False, help="Pass as an argument to delete a reservation.")
 
         required_arguments = parser.add_argument_group('Required arguments')
         required_arguments.add_argument('-t', '--time',    nargs='+', help="Time you would to you reserve. One or two consecutive time slots separated by a space are allowed (hh:mm).", required=True)
@@ -434,6 +482,11 @@ if __name__ == "__main__":
         if (args.query):
             print("Query external reference of a member by name...")
             auto_tenez.retrieve_member_external_reference(args.query)
+            sys.exit(0)
+
+        if (args.delete):
+            print("Attempting to delete a reservation...");
+            auto_tenez.delete_reservation()
             sys.exit(0)
 
         iteration = 1
