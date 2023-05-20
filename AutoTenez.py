@@ -56,7 +56,7 @@ class AutoTenez:
         "Host": "api.socie.nl",
         "AppBundle": "nl.tizin.socie.tennis",
         "Accept": "application/json",
-        "appVersion": "3.11.0",
+        "appVersion": "4.5.0",
         "Accept-Language": "en-us",
         "Cache-Control": "no-cache",
         "Platform": "iOS",
@@ -156,7 +156,7 @@ class AutoTenez:
             self.bearer_token = response['access_token']
             # Add bearer token to all future requests
             self.headers['Authorization'] = "bearer " + self.bearer_token
-
+            
         # Catch JSONDecodeError
         except ValueError as e:
             raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to retrieve your bearer token")
@@ -367,32 +367,62 @@ class AutoTenez:
     def make_reservation(self, md5slotkey):
         time.sleep(1) # Lets not stress the server too much
 
-        # TODO(PATBRO): implement new way of making tennis court reservations
-        #payload = {
-        #    "date": str(self.reservation_date),
-        #    "registeredPlayers":[
-        #        {
-        #            "externalReference": self.your_external_reference,
-        #            "guests": 0
-        #        },
-        #        {
-        #            "externalReference": self.other_players_external_references 
-        #        }
-        #    ],
-        #    "md5slotkey": md5slotkey
-        #}
-        #
-        #r = requests.post("https://api.socie.nl/v2/app/communities/61c45fbd20c43d78ef924307/modules/61cb14184779bc6fcade0980/allunited_tennis_courts/reservations", \
-        #        json=payload, headers=self.headers, cookies=self.cookies)
+        other_players_external_references = self.other_players_external_references.split(',')
+        if (len(other_players_external_references) == 1):
+            payload = {
+                    "date": str(self.reservation_date), 
+                    "registeredPlayers": [ 
+                        {
+                            "externalReference": self.your_external_reference, 
+                            "guests": 0
+                        }, {
+                            "externalReference": other_players_external_references[0]
+                        }
+                    ], 
+                    "md5slotkey": md5slotkey
+                }
+        elif (len(other_players_external_references) == 2):
+            payload = {
+                    "date": str(self.reservation_date), 
+                    "registeredPlayers": [ 
+                        {
+                            "externalReference": self.your_external_reference, 
+                            "guests": 0
+                        }, {
+                            "externalReference": other_players_external_references[0]
+                        },
+                        {
+                            "externalReference": other_players_external_references[1]
+                        }
+                    ], 
+                    "md5slotkey": md5slotkey
+                }
+        elif (len(other_players_external_references) == 3):
+            payload = {
+                    "date": str(self.reservation_date), 
+                    "registeredPlayers": [ 
+                        {
+                            "externalReference": self.your_external_reference, 
+                            "guests": 0
+                        }, {
+                            "externalReference": other_players_external_references[0]
+                        }, {
+                            "externalReference": other_players_external_references[1]
+                        }, {
+                            "externalReference": other_players_external_references[2]
+                        }
+                    ], 
+                    "md5slotkey": md5slotkey
+                }
 
-        r = requests.get("https://api.socie.nl/communities/" + self.community_id + "/tennis_court_reservation_create?date=" \
-            + str(self.reservation_date) + "&md5slotkey=" + md5slotkey + "&externalReferences=" + self.your_external_reference + "," + self.other_players_external_references, \
-            headers=self.headers, cookies=self.cookies)
+        r = requests.post("https://api.socie.nl/v2/app/communities/" + self.community_id + "/modules/61cb14184779bc6fcade0980/allunited_tennis_courts/reservations", 
+            json=payload, headers=self.headers, cookies=self.cookies)
         
         # We expect a status code 204 No Content, with of course no content
         if (r.status_code == 204) and (len(r.content) == 0):
             print("Successfully made the reservation! With md5slotkey " + md5slotkey)
         else:
+            print(r.content) # Always print error message to debug log as well
             raise ParsingResponseFailed(r.status_code, r.headers, r.text, e, "Failed to make the reservation with md5slotkey " + md5slotkey)
 
     def delete_reservation(self):
